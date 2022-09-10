@@ -8,6 +8,6 @@ it can run migration and setup fixtures.
 To install `dbctl` from it source:
 
 ```shell
-go inatall github.com/mirzakhani/dbctl@latest
+go install github.com/mirzakhany/dbctl@latest
 ```
 
