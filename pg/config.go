@@ -14,6 +14,8 @@ type config struct {
 	version string
 
 	logger io.Writer
+
+	migrationsPath string
 }
 
 type Option func(*config) error
@@ -49,6 +51,23 @@ func WithVersion(version string) Option {
 func WithLogger(logger io.Writer) Option {
 	return func(c *config) error {
 		c.logger = logger
+		return nil
+	}
+}
+
+func WithMigrations(path string) Option {
+	return func(c *config) error {
+		v := strings.TrimSpace(path)
+		if len(v) == 0 {
+			return nil
+		}
+
+		if v[0] == '.' {
+			c.migrationsPath = "file://" + path[2:]
+		} else {
+			c.migrationsPath = "file:///" + path[1:]
+		}
+
 		return nil
 	}
 }

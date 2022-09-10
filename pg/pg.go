@@ -1,12 +1,17 @@
 package pg
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 
 	embedpg "github.com/fergusstrange/embedded-postgres"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/mirzakhany/dbctl/pkg"
 	"github.com/spf13/cobra"
 )
@@ -51,8 +56,17 @@ func (p *Postgres) Start() error {
 		return err
 	}
 
-	// print connection url
 	log.Println("Postgres is up an running")
+
+	// run migrations if exist
+	if len(strings.TrimSpace(p.cfg.migrationsPath)) != 0 {
+		log.Println("Applying migration files")
+		if err := p.runMigrations(); err != nil {
+			return err
+		}
+	}
+
+	// print connection url
 	log.Printf("Database uri is: %q\n", p.URI())
 
 	defer func() {
@@ -73,4 +87,12 @@ func (p *Postgres) URI() string {
 
 func (p *Postgres) printURI() {
 	log.Printf("postgres database is running on: %q", p.URI())
+}
+
+func (p *Postgres) runMigrations() error {
+	m, err := migrate.New(p.cfg.migrationsPath, p.URI())
+	if err != nil {
+		return fmt.Errorf("run migrations failed %w", err)
+	}
+	return m.Steps(1)
 }

@@ -23,6 +23,7 @@ func init() {
 	pgCmd.Flags().String("pass", "postgres", "Password, default is postgres")
 	pgCmd.Flags().StringP("name", "n", "postgres", "Database name, default is postgres")
 	pgCmd.Flags().StringP("version", "v", "14.3.0", "Database name, default is postgres")
+	pgCmd.Flags().StringP("migrations", "m", "", "Relative path to migration files, will be applied if provided")
 }
 
 func runPostgres(cmd *cobra.Command, args []string) error {
@@ -51,7 +52,12 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid version args, %w", err)
 	}
 
-	db, err := pg.New(pg.WithHost(user, pass, name, port), pg.WithVersion(pgVersion), pg.WithLogger(io.Discard))
+	migrationsPath, err := cmd.Flags().GetString("migrations")
+	if err != nil {
+		return fmt.Errorf("invalid version args, %w", err)
+	}
+
+	db, err := pg.New(pg.WithHost(user, pass, name, port), pg.WithVersion(pgVersion), pg.WithLogger(io.Discard), pg.WithMigrations(migrationsPath))
 	if err != nil {
 		return err
 	}
