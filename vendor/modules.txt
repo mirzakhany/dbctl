@@ -1,0 +1,22 @@
+# github.com/fergusstrange/embedded-postgres v1.17.0
+## explicit; go 1.13
+github.com/fergusstrange/embedded-postgres
+# github.com/inconshreveable/mousetrap v1.0.1
+## explicit; go 1.18
+github.com/inconshreveable/mousetrap
+# github.com/lib/pq v1.10.7
+## explicit; go 1.13
+github.com/lib/pq
+github.com/lib/pq/oid
+github.com/lib/pq/scram
+# github.com/spf13/cobra v1.5.0
+## explicit; go 1.15
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.5
+## explicit; go 1.12
+github.com/spf13/pflag
+# github.com/stretchr/testify v1.8.0
+## explicit; go 1.13
+# github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8
+## explicit
+github.com/xi2/xz

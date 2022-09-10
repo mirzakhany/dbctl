@@ -1,0 +1,39 @@
+linters:
+  enable:
+    - deadcode
+    - errcheck
+    - govet
+    - ineffassign
+    - typecheck
+    - varcheck
+    - exportloopref
+    - depguard
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - misspell
+    - nakedret
+    - prealloc
+    - unconvert
+    - gosec
+    - revive
+  disable:
+    - unused
+    - structcheck
+    - staticcheck
+    - gosimple
+    - gochecknoinits
+    - gochecknoglobals
+    - lll
+    - maligned
+    - dupl
+
+linters-settings:
+  errcheck:
+    ignore: fmt:.*
+
+run:
+  modules-download-mode: vendor
+  timeout: 2m
