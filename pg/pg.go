@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/testcontainers/testcontainers-go/wait"
+
 	embedpg "github.com/fergusstrange/embedded-postgres"
 	"github.com/golang-migrate/migrate/v4"
 
@@ -22,7 +24,6 @@ import (
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/pkg"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 type Postgres struct {
@@ -117,7 +118,7 @@ func (p *Postgres) startUsingDocker(ctx context.Context) (func() error, error) {
 		},
 		Cmd:          []string{"postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"},
 		ExposedPorts: []string{fmt.Sprintf("%s:5432/tcp", port)},
-		WaitingFor:   wait.ForLog("database system is ready to accept connections"),
+		WaitingFor:   wait.ForListeningPort("5432/tcp"),
 		Name:         fmt.Sprintf("dbctl_%d_%d", time.Now().Unix(), rnd.Uint64()),
 	})
 	if err != nil {
