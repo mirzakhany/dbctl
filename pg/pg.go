@@ -12,7 +12,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/mirzakhany/dbctl/pkg"
+	"github.com/mirzakhany/dbctl/internal/pkg"
 	"github.com/spf13/cobra"
 )
 
