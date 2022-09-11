@@ -125,7 +125,10 @@ func (p *Postgres) startUsingDocker(ctx context.Context) (func() error, error) {
 		return nil, err
 	}
 
-	closeFunc := func() error { return pg.Terminate(ctx) }
+	closeFunc := func() error {
+		_ = pg.Terminate(ctx)
+		return nil
+	}
 	return closeFunc, nil
 }
 

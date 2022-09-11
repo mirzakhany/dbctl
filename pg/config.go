@@ -26,6 +26,7 @@ var (
 		"11.2.5": "postgis/postgis:11-2.5-alpine",
 		"11.3.2": "postgis/postgis:11-3.2-alpine",
 		"12.3.2": "postgis/postgis:12-3.2-alpine",
+		"13-3.1": "odidev/postgis:13-3.1-alpine",
 		"13.3.2": "postgis/postgis:13-3.2-alpine",
 		"14.3.2": "postgis/postgis:14-3.2-alpine",
 	}
@@ -49,9 +50,9 @@ func WithVersion(version string) Option {
 	return func(c *config) error {
 		if vv == "" {
 			if c.useDockerEngine {
-				c.version = "14.3.2"
+				c.version = "13-3.1"
 			} else {
-				c.version = "14.3.0"
+				c.version = "13.7.0"
 			}
 			return nil
 		}
@@ -112,6 +113,6 @@ func getPostGisImage(version string) string {
 	if v, ok := supportedDockerVersions[version]; ok {
 		return v
 	}
-	// fallback to the latest version
-	return "postgis/postgis:14-3.2-alpine"
+	// fallback to odidev/postgis:13-3.1
+	return "odidev/postgis:13-3.1-alpine"
 }
