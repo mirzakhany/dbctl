@@ -22,7 +22,7 @@ func init() {
 	pgCmd.Flags().StringP("user", "u", "postgres", "Username, default is postgres")
 	pgCmd.Flags().String("pass", "postgres", "Password, default is postgres")
 	pgCmd.Flags().StringP("name", "n", "postgres", "Database name, default is postgres")
-	pgCmd.Flags().StringP("version", "v", "14.3.0", "Database name, default is postgres")
+	pgCmd.Flags().StringP("version", "v", "", "Database version, default for native 14.3.0 and 14.3.2 for docker engine")
 	pgCmd.Flags().StringP("migrations", "m", "", "Relative path to migration files, will be applied if provided")
 }
 
@@ -54,10 +54,21 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 
 	migrationsPath, err := cmd.Flags().GetString("migrations")
 	if err != nil {
-		return fmt.Errorf("invalid version args, %w", err)
+		return fmt.Errorf("invalid migrations args, %w", err)
 	}
 
-	db, err := pg.New(pg.WithHost(user, pass, name, port), pg.WithVersion(pgVersion), pg.WithLogger(io.Discard), pg.WithMigrations(migrationsPath))
+	useDockerEngine, err := cmd.Flags().GetBool("use-docker")
+	if err != nil {
+		return fmt.Errorf("invalid use-docker args, %w", err)
+	}
+
+	db, err := pg.New(
+		pg.WithDockerEngine(useDockerEngine),
+		pg.WithHost(user, pass, name, port),
+		pg.WithVersion(pgVersion),
+		pg.WithLogger(io.Discard),
+		pg.WithMigrations(migrationsPath),
+	)
 	if err != nil {
 		return err
 	}

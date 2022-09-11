@@ -1,19 +1,28 @@
 package pg
 
 import (
+	"context"
+	"crypto/rand"
 	"fmt"
 	"log"
+	"math/big"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	embedpg "github.com/fergusstrange/embedded-postgres"
 	"github.com/golang-migrate/migrate/v4"
+
+	// golang migration postgres driver
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	// golang migration file driver
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/pkg"
-	"github.com/spf13/cobra"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 type Postgres struct {
@@ -40,24 +49,21 @@ func New(options ...Option) (*Postgres, error) {
 
 func (p *Postgres) Start() error {
 	ctx := pkg.ContextWithOsSignal()
-
-	config := embedpg.DefaultConfig().
-		Locale("en_US.UTF-8").
-		Username(p.cfg.user).
-		Password(p.cfg.pass).
-		Database(p.cfg.name).
-		Version(embedpg.PostgresVersion(p.cfg.version)).
-		Port(p.cfg.port).
-		Logger(p.cfg.logger)
-
-	database := embedpg.NewDatabase(config)
 	log.Printf("Starting postgres version %s on port %d ...\n", p.cfg.version, p.cfg.port)
-	if err := database.Start(); err != nil {
+
+	var err error
+	var closeFunc func() error
+
+	if p.cfg.useDockerEngine {
+		closeFunc, err = p.startUsingDocker(ctx)
+	} else {
+		closeFunc, err = p.startUsingNative()
+	}
+	if err != nil {
 		return err
 	}
 
-	log.Println("Postgres is up an running")
-
+	log.Println("Postgres is up and running")
 	// run migrations if exist
 	if len(strings.TrimSpace(p.cfg.migrationsPath)) != 0 {
 		log.Println("Applying migration files")
@@ -69,15 +75,57 @@ func (p *Postgres) Start() error {
 	// print connection url
 	log.Printf("Database uri is: %q\n", p.URI())
 
-	defer func() {
-		log.Println("Shutdown signal received, stopping database")
-		if err := database.Stop(); err != nil {
-			cobra.CheckErr(err)
-		}
-	}()
-
 	<-ctx.Done()
-	return nil
+	log.Println("Shutdown signal received, stopping database")
+	return closeFunc()
+}
+
+func (p *Postgres) startUsingNative() (func() error, error) {
+	config := embedpg.DefaultConfig().
+		Locale("en_US.UTF-8").
+		Username(p.cfg.user).
+		Password(p.cfg.pass).
+		Database(p.cfg.name).
+		Version(embedpg.PostgresVersion(p.cfg.version)).
+		Port(p.cfg.port).
+		Logger(p.cfg.logger)
+
+	database := embedpg.NewDatabase(config)
+	if err := database.Start(); err != nil {
+		return func() error {
+			return database.Stop()
+		}, err
+	}
+
+	return func() error {
+		return database.Stop()
+	}, nil
+}
+
+func (p *Postgres) startUsingDocker(ctx context.Context) (func() error, error) {
+	var rnd, err = rand.Int(rand.Reader, big.NewInt(20))
+	if err != nil {
+		return nil, err
+	}
+	port := strconv.Itoa(int(p.cfg.port))
+	pg, err := container.Run(ctx, testcontainers.ContainerRequest{
+		Image: getPostGisImage(p.cfg.version),
+		Env: map[string]string{
+			"POSTGRES_PASSWORD": p.cfg.pass,
+			"POSTGRES_USER":     p.cfg.user,
+			"POSTGRES_DB":       p.cfg.name,
+		},
+		Cmd:          []string{"postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"},
+		ExposedPorts: []string{fmt.Sprintf("%s:5432/tcp", port)},
+		WaitingFor:   wait.ForLog("database system is ready to accept connections"),
+		Name:         fmt.Sprintf("dbctl_%d_%d", time.Now().Unix(), rnd.Uint64()),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	closeFunc := func() error { return pg.Terminate(ctx) }
+	return closeFunc, nil
 }
 
 func (p *Postgres) URI() string {
