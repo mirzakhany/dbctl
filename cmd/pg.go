@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/mirzakhany/dbctl/pg"
-
+	"github.com/mirzakhany/dbctl/internal/pg"
 	"github.com/spf13/cobra"
 )
 
