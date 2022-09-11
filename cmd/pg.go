@@ -19,9 +19,9 @@ var pgCmd = &cobra.Command{
 func init() {
 	startCmd.AddCommand(pgCmd)
 
-	pgCmd.Flags().StringP("user", "u", "postgres", "Username, default is postgres")
-	pgCmd.Flags().String("pass", "postgres", "Password, default is postgres")
-	pgCmd.Flags().StringP("name", "n", "postgres", "Database name, default is postgres")
+	pgCmd.Flags().StringP("user", "u", "postgres", "Database username")
+	pgCmd.Flags().String("pass", "postgres", "Database password")
+	pgCmd.Flags().StringP("name", "n", "postgres", "Database name")
 	pgCmd.Flags().StringP("version", "v", "", "Database version, default for native 14.3.0 and 14.3.2 for docker engine")
 	pgCmd.Flags().StringP("migrations", "m", "", "Relative path to migration files, will be applied if provided")
 }
