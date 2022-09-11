@@ -18,6 +18,7 @@ var pgCmd = &cobra.Command{
 func init() {
 	startCmd.AddCommand(pgCmd)
 
+	pgCmd.Flags().Uint32P("port", "p", 15432, "postgres default port")
 	pgCmd.Flags().StringP("user", "u", "postgres", "Database username")
 	pgCmd.Flags().String("pass", "postgres", "Database password")
 	pgCmd.Flags().StringP("name", "n", "postgres", "Database name")
