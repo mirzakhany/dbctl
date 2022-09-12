@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version will be populated by the build script with the sha of the last git commit.
 var version = "snapshot"
 
 // versionCmd represents the version command
