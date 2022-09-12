@@ -3,9 +3,9 @@ ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 TAG_NAME?=$(shell git describe --tags)
 SHORT_SHA?=$(shell git rev-parse --short HEAD)
 VERSION?=$(TAG_NAME)-$(SHORT_SHA)
-LDFLAGS=-ldflags "-X=cmd.version=$(VERSION)"
+LDFLAGS=-ldflags "-X=main.version=$(VERSION)"
 GOCMD?=CGO_ENABLED=0 go
-GO_MAIN_SRC?=main.go
+GO_MAIN_SRC?=.
 
 ##@ General
 
@@ -43,8 +43,9 @@ vendor: ## Reset the main module's vendor directory to include all packages.
 
 .PHONY: build
 build: ## Build service binary.
-	$(GOCMD) build -mod vendor $(LDFLAGS) -o dbctl .
+	$(GOCMD) build -mod vendor $(LDFLAGS) -o dbctl $(GO_MAIN_SRC)
 
 .PHONY: install
 install: ## build and install the dbctl
-	$(GOCMD) install -mod vendor $(LDFLAGS) .
+	$(GOCMD) install -mod vendor $(LDFLAGS) $(GO_MAIN_SRC)
+

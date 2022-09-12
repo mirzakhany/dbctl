@@ -8,22 +8,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// pgCmd represents the pg command
-var pgCmd = &cobra.Command{
-	Use:   "pg",
-	Short: "Run a postgres instance",
-	RunE:  runPostgres,
-}
+// GetPgCmd represents the pg command
+func GetPgCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pg",
+		Short: "Run a postgres instance",
+		RunE:  runPostgres,
+	}
 
-func init() {
-	startCmd.AddCommand(pgCmd)
+	cmd.Flags().Uint32P("port", "p", 15432, "postgres default port")
+	cmd.Flags().StringP("user", "u", "postgres", "Database username")
+	cmd.Flags().String("pass", "postgres", "Database password")
+	cmd.Flags().StringP("name", "n", "postgres", "Database name")
+	cmd.Flags().StringP("version", "v", "", "Database version, default for native 14.3.0 and 14.3.2 for docker engine")
+	cmd.Flags().StringP("migrations", "m", "", "Relative path to migration files, will be applied if provided")
 
-	pgCmd.Flags().Uint32P("port", "p", 15432, "postgres default port")
-	pgCmd.Flags().StringP("user", "u", "postgres", "Database username")
-	pgCmd.Flags().String("pass", "postgres", "Database password")
-	pgCmd.Flags().StringP("name", "n", "postgres", "Database name")
-	pgCmd.Flags().StringP("version", "v", "", "Database version, default for native 14.3.0 and 14.3.2 for docker engine")
-	pgCmd.Flags().StringP("migrations", "m", "", "Relative path to migration files, will be applied if provided")
+	return cmd
 }
 
 func runPostgres(cmd *cobra.Command, args []string) error {
