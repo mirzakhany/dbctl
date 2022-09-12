@@ -146,5 +146,5 @@ func (p *Postgres) runMigrations() error {
 	if err != nil {
 		return fmt.Errorf("run migrations failed %w", err)
 	}
-	return m.Steps(1)
+	return m.Up()
 }
