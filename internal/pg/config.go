@@ -3,6 +3,8 @@ package pg
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -16,6 +18,7 @@ type config struct {
 	logger io.Writer
 
 	migrationsPath  string
+	fixtureFiles    []string
 	useDockerEngine bool
 }
 
@@ -87,12 +90,15 @@ func WithLogger(logger io.Writer) Option {
 
 func WithMigrations(path string) Option {
 	return func(c *config) error {
-		v := strings.TrimSpace(path)
-		if len(v) == 0 {
+		if len(path) == 0 {
 			return nil
 		}
 
-		if v[0] == '.' {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return fmt.Errorf("migraions path %s not exit", path)
+		}
+
+		if path[0] == '.' {
 			c.migrationsPath = "file://" + path[2:]
 		} else {
 			c.migrationsPath = "file:///" + path[1:]
@@ -105,6 +111,42 @@ func WithMigrations(path string) Option {
 func WithDockerEngine(useDocker bool) Option {
 	return func(c *config) error {
 		c.useDockerEngine = useDocker
+		return nil
+	}
+}
+
+func WithFixtures(path string) Option {
+	return func(c *config) error {
+		if len(path) == 0 {
+			return nil
+		}
+
+		stat, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("get fixture path information failed, %w", err)
+		}
+
+		if !stat.IsDir() {
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				return fmt.Errorf("fixture file %s not exit", path)
+			}
+			c.fixtureFiles = append(c.fixtureFiles, path)
+			return nil
+		}
+
+		files, err := os.ReadDir(path)
+		if err != nil {
+			return err
+		}
+
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return err
+		}
+		for _, f := range files {
+			// TODO check fixtures file for format and template
+			c.fixtureFiles = append(c.fixtureFiles, filepath.Join(absPath, f.Name()))
+		}
 		return nil
 	}
 }

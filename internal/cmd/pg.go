@@ -21,7 +21,8 @@ func GetPgCmd() *cobra.Command {
 	cmd.Flags().String("pass", "postgres", "Database password")
 	cmd.Flags().StringP("name", "n", "postgres", "Database name")
 	cmd.Flags().StringP("version", "v", "", "Database version, default for native 14.3.0 and 14.3.2 for docker engine")
-	cmd.Flags().StringP("migrations", "m", "", "Relative path to migration files, will be applied if provided")
+	cmd.Flags().StringP("migrations", "m", "", "Path to migration files, will be applied if provided")
+	cmd.Flags().StringP("fixtures", "f", "", "Fixture files, will be applied if provided, files will be sorted by name before apply")
 
 	return cmd
 }
@@ -57,6 +58,11 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid migrations args, %w", err)
 	}
 
+	fixturesPath, err := cmd.Flags().GetString("fixtures")
+	if err != nil {
+		return fmt.Errorf("invalid fixtures args, %w", err)
+	}
+
 	useDockerEngine, err := cmd.Flags().GetBool("use-docker")
 	if err != nil {
 		return fmt.Errorf("invalid use-docker args, %w", err)
@@ -68,6 +74,7 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 		pg.WithVersion(pgVersion),
 		pg.WithLogger(io.Discard),
 		pg.WithMigrations(migrationsPath),
+		pg.WithFixtures(fixturesPath),
 	)
 	if err != nil {
 		return err

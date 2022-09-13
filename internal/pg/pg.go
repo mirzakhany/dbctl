@@ -8,14 +8,14 @@ import (
 	"math/big"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
-	"strings"
 	"time"
-
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	embedpg "github.com/fergusstrange/embedded-postgres"
 	"github.com/golang-migrate/migrate/v4"
+	"github.com/jackc/pgx/v4"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	// golang migration postgres driver
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -66,11 +66,13 @@ func (p *Postgres) Start() error {
 
 	log.Println("Postgres is up and running")
 	// run migrations if exist
-	if len(strings.TrimSpace(p.cfg.migrationsPath)) != 0 {
-		log.Println("Applying migration files")
-		if err := p.runMigrations(); err != nil {
-			return err
-		}
+	if err := p.runMigrations(); err != nil {
+		return err
+	}
+
+	// run apply fixtures if exist
+	if err := p.applyFixtures(ctx); err != nil {
+		return err
 	}
 
 	// print connection url
@@ -142,9 +144,41 @@ func (p *Postgres) printURI() {
 }
 
 func (p *Postgres) runMigrations() error {
+	if len(p.cfg.migrationsPath) == 0 {
+		return nil
+	}
+
+	log.Println("Applying migrations ...")
 	m, err := migrate.New(p.cfg.migrationsPath, p.URI())
 	if err != nil {
 		return fmt.Errorf("run migrations failed %w", err)
 	}
 	return m.Up()
+}
+
+func (p *Postgres) applyFixtures(ctx context.Context) error {
+	if len(p.cfg.fixtureFiles) == 0 {
+		return nil
+	}
+
+	log.Println("Applying fixtures ...")
+	conn, err := pgx.Connect(ctx, p.URI())
+	if err != nil {
+		return fmt.Errorf("unable to connect to database: %w", err)
+	}
+	defer func() {
+		_ = conn.Close(ctx)
+	}()
+
+	for _, f := range p.cfg.fixtureFiles {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return fmt.Errorf("read fixture file (%s) failed: %w", f, err)
+		}
+
+		if _, err := conn.Exec(ctx, string(b)); err != nil {
+			return fmt.Errorf("applying fixture file (%s) failed: %w", f, err)
+		}
+	}
+	return nil
 }
