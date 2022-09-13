@@ -22,7 +22,7 @@ func GetPgCmd() *cobra.Command {
 	cmd.Flags().StringP("name", "n", "postgres", "Database name")
 	cmd.Flags().StringP("version", "v", "", "Database version, default for native 14.3.0 and 14.3.2 for docker engine")
 	cmd.Flags().StringP("migrations", "m", "", "Path to migration files, will be applied if provided")
-	cmd.Flags().StringP("fixtures", "f", "", "Fixture files, will be applied if provided, files will be sorted by name before apply")
+	cmd.Flags().StringP("fixtures", "f", "", "Path to fixture files, its can be a file or directory.files in directory will be sorted by name before applying.")
 
 	return cmd
 }
