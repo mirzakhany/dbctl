@@ -76,6 +76,11 @@ func (p *Postgres) Start() error {
 	// print connection url
 	log.Printf("Database uri is: %q\n", p.URI())
 
+	// detach and stop cli if asked
+	if p.cfg.detach {
+		return nil
+	}
+
 	<-ctx.Done()
 	log.Println("Shutdown signal received, stopping database")
 

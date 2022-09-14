@@ -33,6 +33,11 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid port args, %w", err)
 	}
 
+	detach, err := cmd.Flags().GetBool("detach")
+	if err != nil {
+		return fmt.Errorf("invalid detach args, %w", err)
+	}
+
 	name, err := cmd.Flags().GetString("name")
 	if err != nil {
 		return fmt.Errorf("invalid name args, %w", err)
@@ -75,6 +80,7 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 		pg.WithLogger(io.Discard),
 		pg.WithMigrations(migrationsPath),
 		pg.WithFixtures(fixturesPath),
+		pg.WithDetach(detach),
 	)
 	if err != nil {
 		return err
@@ -83,5 +89,6 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 	if err := db.Start(); err != nil {
 		return err
 	}
+
 	return nil
 }
