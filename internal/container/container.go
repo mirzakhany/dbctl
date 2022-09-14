@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"io"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -29,8 +30,9 @@ func Run(ctx context.Context, req Request) (*Container, error) {
 
 	reader, err := cli.ImagePull(ctx, req.Image, types.ImagePullOptions{})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
+	_, _ = io.Copy(io.Discard, reader)
 
 	defer func() {
 		_ = reader.Close()
