@@ -51,7 +51,14 @@ Out put:
 ```shell
 dbctl start rs
 ```
-this command will start a redis instance using docker engine on port `16379`, with no username and password.
+It will start a redis instance using docker engine on port `16379`, with no username and password.
+
+Output:
+```shell
+2022/09/17 17:20:58 Starting redis version 7.0.4 on port 16379 ...
+2022/09/17 17:21:01 Wait for database to boot up
+2022/09/17 17:21:01 Database uri is: "redis://localhost:16379/0"
+```
 
 Flags:
 ```shell
