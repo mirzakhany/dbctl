@@ -30,14 +30,21 @@ func doSelfUpdate(version string) error {
 		return err
 	}
 
-	vr := strings.Split(version, "-")[0]
-	v := semver.MustParse(vr[1:])
+	// to make sure self update works from installations from source code.
+	var v semver.Version
+	if version == "snapshot" {
+		v = semver.MustParse("0.0.1")
+	} else {
+		vr := strings.Split(version, "-")[0]
+		v = semver.MustParse(vr[1:])
+	}
+
 	if !found || latest.Version.LTE(v) {
 		log.Println("Current version is the latest")
 		return err
 	}
 
-	log.Print("Do you want to update to", latest.Version, "? (y/n): ")
+	log.Print("Do you want to update to ", latest.Version, "? (y/n): ")
 	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil || (input != "y\n" && input != "n\n") {
 		log.Println("Invalid input")
