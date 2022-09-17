@@ -100,12 +100,12 @@ func WithMigrations(path string) Option {
 			return fmt.Errorf("migraions path %s not exit", path)
 		}
 
-		if path[0] == '.' {
-			c.migrationsPath = "file://" + path[2:]
-		} else {
-			c.migrationsPath = "file:///" + path[1:]
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return err
 		}
 
+		c.migrationsPath = "file://" + absPath
 		return nil
 	}
 }
