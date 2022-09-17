@@ -15,5 +15,6 @@ func GetStartCmd() *cobra.Command {
 	cmd.PersistentFlags().Bool("use-docker", true, "Use Docker to run databases")
 
 	cmd.AddCommand(GetPgCmd())
+	cmd.AddCommand(GetRedisCmd())
 	return cmd
 }

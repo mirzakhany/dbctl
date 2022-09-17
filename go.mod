@@ -8,6 +8,7 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/fergusstrange/embedded-postgres v1.17.0
 	github.com/golang-migrate/migrate/v4 v4.15.2
+	github.com/gomodule/redigo v1.8.9
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/rhysd/go-github-selfupdate v1.2.3
 	github.com/spf13/cobra v1.5.0
@@ -47,7 +48,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
 	golang.org/x/net v0.0.0-20220909164309-bea034e7d591 // indirect
 	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1 // indirect
-	golang.org/x/sys v0.0.0-20220913120320-3275c407cedc // indirect
+	golang.org/x/sys v0.0.0-20220915200043-7b5979e65e41 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
