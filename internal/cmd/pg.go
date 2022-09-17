@@ -11,9 +11,10 @@ import (
 // GetPgCmd represents the pg command
 func GetPgCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pg",
-		Short: "Run a postgres instance",
-		RunE:  runPostgres,
+		Aliases: []string{"pg"},
+		Use:     "postgres",
+		Short:   "Run a postgres instance",
+		RunE:    runPostgres,
 	}
 
 	cmd.Flags().Uint32P("port", "p", 15432, "postgres default port")
