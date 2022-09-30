@@ -1,4 +1,4 @@
-package pkg
+package cmd
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 
 var defaultExistSignals = []os.Signal{syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT}
 
-// ContextWithOsSignal returns a context with by default is listening to
+// contextWithOsSignal returns a context with by default is listening to
 // SIGHUP, SIGINT, SIGTERM, SIGQUIT os signals to cancel
-func ContextWithOsSignal(sig ...os.Signal) context.Context {
+func contextWithOsSignal(sig ...os.Signal) context.Context {
 	if len(sig) == 0 {
 		sig = defaultExistSignals
 	}

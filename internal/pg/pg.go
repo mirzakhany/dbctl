@@ -21,7 +21,6 @@ import (
 	// golang migration file driver
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/mirzakhany/dbctl/internal/container"
-	"github.com/mirzakhany/dbctl/internal/pkg"
 )
 
 type Postgres struct {
@@ -46,8 +45,7 @@ func New(options ...Option) (*Postgres, error) {
 	return pg, nil
 }
 
-func (p *Postgres) Start() error {
-	ctx := pkg.ContextWithOsSignal()
+func (p *Postgres) Start(ctx context.Context) error {
 	log.Printf("Starting postgres version %s on port %d ...\n", p.cfg.version, p.cfg.port)
 
 	var err error

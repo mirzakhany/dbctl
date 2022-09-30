@@ -13,7 +13,6 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/mirzakhany/dbctl/internal/container"
-	"github.com/mirzakhany/dbctl/internal/pkg"
 )
 
 type Redis struct {
@@ -37,8 +36,7 @@ func New(options ...Option) (*Redis, error) {
 	return pg, nil
 }
 
-func (p *Redis) Start() error {
-	ctx := pkg.ContextWithOsSignal()
+func (p *Redis) Start(ctx context.Context) error {
 	log.Printf("Starting redis version %s on port %d ...\n", p.cfg.version, p.cfg.port)
 
 	closeFunc, err := p.startUsingDocker(ctx)

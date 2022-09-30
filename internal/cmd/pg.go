@@ -87,7 +87,7 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := db.Start(); err != nil {
+	if err := db.Start(contextWithOsSignal()); err != nil {
 		return err
 	}
 
