@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"io"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -19,7 +20,8 @@ type Request struct {
 }
 
 type Container struct {
-	ID string
+	ID   string
+	Name string
 }
 
 func Run(ctx context.Context, req Request) (*Container, error) {
@@ -58,7 +60,7 @@ func Run(ctx context.Context, req Request) (*Container, error) {
 		return nil, err
 	}
 
-	cn := &Container{ID: resp.ID}
+	cn := &Container{ID: resp.ID, Name: req.Name}
 	if err := cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 		return cn, err
 	}
@@ -78,4 +80,29 @@ func (c *Container) Terminate(ctx context.Context) error {
 		Force:         true,
 	})
 	return err
+}
+
+func List(ctx context.Context) ([]*Container, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*Container, 0)
+	for _, c := range res {
+		n := c.Names[0]
+		if strings.HasPrefix(n, "/dbctl") {
+			out = append(out, &Container{ID: c.ID, Name: c.Names[0]})
+		}
+	}
+	return out, nil
+}
+
+func Remove(ctx context.Context, container *Container) error {
+	return container.Terminate(ctx)
 }

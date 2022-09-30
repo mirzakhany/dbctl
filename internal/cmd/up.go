@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// GetUpCmd represents the start command
+// GetUpCmd represents the up command
 func GetUpCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "up",
@@ -32,13 +32,4 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 
 	return errors.New("invalid args, can be postgres(pg) and/or redis(rs)")
-}
-
-func contain(src []string, target, alias string) bool {
-	for _, s := range src {
-		if s == target || s == alias {
-			return true
-		}
-	}
-	return false
 }

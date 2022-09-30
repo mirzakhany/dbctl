@@ -25,3 +25,12 @@ func contextWithOsSignal(sig ...os.Signal) context.Context {
 	}()
 	return ctx
 }
+
+func contain(src []string, target, alias string) bool {
+	for _, s := range src {
+		if s == target || s == alias {
+			return true
+		}
+	}
+	return false
+}

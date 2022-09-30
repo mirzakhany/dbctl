@@ -128,7 +128,7 @@ func (p *Postgres) startUsingDocker(ctx context.Context) (func(ctx context.Conte
 		},
 		Cmd:          []string{"postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"},
 		ExposedPorts: []string{fmt.Sprintf("%s:5432/tcp", port)},
-		Name:         fmt.Sprintf("dbctl_%d_%d", time.Now().Unix(), rnd.Uint64()),
+		Name:         fmt.Sprintf("dbctl_pg_%d_%d", time.Now().Unix(), rnd.Uint64()),
 	})
 	if err != nil {
 		return nil, err

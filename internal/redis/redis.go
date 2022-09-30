@@ -79,7 +79,7 @@ func (p *Redis) startUsingDocker(ctx context.Context) (func(ctx context.Context)
 			"--databases", "2000",
 		},
 		ExposedPorts: []string{fmt.Sprintf("%s:6379/tcp", port)},
-		Name:         fmt.Sprintf("dbctl_%d_%d", time.Now().Unix(), rnd.Uint64()),
+		Name:         fmt.Sprintf("dbctl_rs_%d_%d", time.Now().Unix(), rnd.Uint64()),
 	})
 	if err != nil {
 		return nil, err
