@@ -33,7 +33,7 @@ func New(options ...Option) (*Postgres, error) {
 		pass:    "postgres",
 		user:    "postgres",
 		name:    "postgres",
-		port:    5432,
+		port:    15432,
 		version: "14.3.0",
 	}}
 
@@ -62,12 +62,12 @@ func (p *Postgres) Start(ctx context.Context) error {
 
 	log.Println("Postgres is up and running")
 	// run migrations if exist
-	if err := p.runMigrations(); err != nil {
+	if err := RunMigrations(p.cfg.migrationsPath, p.URI()); err != nil {
 		return err
 	}
 
 	// run apply fixtures if exist
-	if err := p.applyFixtures(ctx); err != nil {
+	if err := ApplyFixtures(ctx, p.cfg.fixtureFiles, p.URI()); err != nil {
 		return err
 	}
 
@@ -138,7 +138,7 @@ func (p *Postgres) startUsingDocker(ctx context.Context) (func(ctx context.Conte
 		return pg.Terminate(ctx)
 	}
 
-	return closeFunc, waitForPostgres(ctx, p.URI())
+	return closeFunc, WaitForPostgres(ctx, p.URI())
 }
 
 func (p *Postgres) URI() string {
@@ -146,26 +146,26 @@ func (p *Postgres) URI() string {
 	return (&url.URL{Scheme: "postgres", User: url.UserPassword(p.cfg.user, p.cfg.pass), Host: host, Path: p.cfg.name, RawQuery: "sslmode=disable"}).String()
 }
 
-func (p *Postgres) runMigrations() error {
-	if len(p.cfg.migrationsPath) == 0 {
+func RunMigrations(migrationsPath, uri string) error {
+	if len(migrationsPath) == 0 {
 		return nil
 	}
 
 	log.Println("Applying migrations ...")
-	m, err := migrate.New(p.cfg.migrationsPath, p.URI())
+	m, err := migrate.New(migrationsPath, uri)
 	if err != nil {
 		return fmt.Errorf("run migrations failed %w", err)
 	}
 	return m.Up()
 }
 
-func (p *Postgres) applyFixtures(ctx context.Context) error {
-	if len(p.cfg.fixtureFiles) == 0 {
+func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error {
+	if len(fixtureFiles) == 0 {
 		return nil
 	}
 
 	log.Println("Applying fixtures ...")
-	conn, err := pgx.Connect(ctx, p.URI())
+	conn, err := pgx.Connect(ctx, uri)
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
 	}
@@ -173,7 +173,7 @@ func (p *Postgres) applyFixtures(ctx context.Context) error {
 		_ = conn.Close(ctx)
 	}()
 
-	for _, f := range p.cfg.fixtureFiles {
+	for _, f := range fixtureFiles {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			return fmt.Errorf("read fixture file (%s) failed: %w", f, err)
@@ -186,7 +186,7 @@ func (p *Postgres) applyFixtures(ctx context.Context) error {
 	return nil
 }
 
-func waitForPostgres(ctx context.Context, url string) error {
+func WaitForPostgres(ctx context.Context, url string) error {
 	log.Println("Wait for database to boot up")
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
