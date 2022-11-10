@@ -12,7 +12,7 @@ import (
 // GetDownCmd represents the down command
 func GetDownCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "down",
+		Use:   "down {rs pg}",
 		Short: "stop one or more detached databases",
 		RunE:  runDown,
 	}
@@ -25,7 +25,7 @@ func runDown(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := contextWithOsSignal()
-	r, err := container.List(ctx)
+	containers, err := container.List(ctx)
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func runDown(cmd *cobra.Command, args []string) error {
 		toRemove["rs"] = struct{}{}
 	}
 
-	for _, c := range r {
+	for _, c := range containers {
 		t := strings.Split(c.Name, "_")[1]
 		if _, ok := toRemove[t]; ok {
 			if err := container.Remove(ctx, c); err != nil {
