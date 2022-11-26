@@ -18,6 +18,7 @@ func main() {
 	root.SetVersionTemplate(fmt.Sprintf("dbctl version %s\n", version))
 
 	root.AddCommand(cmd.GetStartCmd())
+	root.AddCommand(cmd.GetStopCmd())
 	root.AddCommand(cmd.GetUpCmd())
 	root.AddCommand(cmd.GetDownCmd())
 	root.AddCommand(cmd.GetSelfUpdateCmd(version))
