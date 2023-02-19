@@ -11,17 +11,22 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/docker/docker/api/types/filters"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mirzakhany/dbctl/internal/container"
+	"github.com/mirzakhany/dbctl/internal/database"
 )
 
+var _ database.Database = (*Redis)(nil)
+
 type Redis struct {
-	cfg config
+	containerID string
+	cfg         config
 }
 
 func New(options ...Option) (*Redis, error) {
 	// create redis with default values
-	pg := &Redis{cfg: config{
+	rs := &Redis{cfg: config{
 		pass:    "",
 		user:    "",
 		port:    16379,
@@ -29,17 +34,17 @@ func New(options ...Option) (*Redis, error) {
 	}}
 
 	for _, o := range options {
-		if err := o(&pg.cfg); err != nil {
+		if err := o(&rs.cfg); err != nil {
 			return nil, err
 		}
 	}
-	return pg, nil
+	return rs, nil
 }
 
-func (p *Redis) Start(ctx context.Context) error {
+func (p *Redis) Start(ctx context.Context, detach bool) error {
 	log.Printf("Starting redis version %s on port %d ...\n", p.cfg.version, p.cfg.port)
 
-	closeFunc, err := p.startUsingDocker(ctx)
+	closeFunc, err := p.startUsingDocker(ctx, 20*time.Second)
 	if err != nil {
 		_ = closeFunc(ctx)
 		return err
@@ -49,7 +54,8 @@ func (p *Redis) Start(ctx context.Context) error {
 	log.Printf("Database uri is: %q\n", p.URI())
 
 	// detach and stop cli if asked
-	if p.cfg.detach {
+	p.cfg.detached = detach
+	if detach {
 		return nil
 	}
 
@@ -64,7 +70,50 @@ func (p *Redis) Start(ctx context.Context) error {
 	return closeFunc(shutdownCtx)
 }
 
-func (p *Redis) startUsingDocker(ctx context.Context) (func(ctx context.Context) error, error) {
+func (p *Redis) Stop(ctx context.Context) error {
+	return container.TerminateByID(ctx, p.containerID)
+}
+
+func (p *Redis) WaitForStart(ctx context.Context, timeout time.Duration) error {
+	log.Println("Wait for database to boot up")
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	for range ticker.C {
+		conn, err := redis.DialURLContext(ctx, p.noAuthURI())
+		if err != nil {
+			if err == context.DeadlineExceeded {
+				return err
+			}
+		} else {
+			_ = conn.Close()
+			return nil
+		}
+	}
+	return nil
+}
+
+func Instances(ctx context.Context) ([]database.Info, error) {
+	l, err := container.List(ctx, filters.KeyValuePair{Key: database.LabelType, Value: database.LabelRedis})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]database.Info, 0, len(l))
+	for _, c := range l {
+		out = append(out, database.Info{
+			ID:     c.ID,
+			Type:   c.Name,
+			Status: database.Running,
+		})
+	}
+	return out, nil
+}
+
+func (p *Redis) startUsingDocker(ctx context.Context, timeout time.Duration) (func(ctx context.Context) error, error) {
 	var rnd, err = rand.Int(rand.Reader, big.NewInt(20))
 	if err != nil {
 		return nil, err
@@ -80,6 +129,7 @@ func (p *Redis) startUsingDocker(ctx context.Context) (func(ctx context.Context)
 		},
 		ExposedPorts: []string{fmt.Sprintf("%s:6379/tcp", port)},
 		Name:         fmt.Sprintf("dbctl_rs_%d_%d", time.Now().Unix(), rnd.Uint64()),
+		Labels:       map[string]string{database.LabelType: database.LabelRedis},
 	})
 	if err != nil {
 		return nil, err
@@ -89,12 +139,11 @@ func (p *Redis) startUsingDocker(ctx context.Context) (func(ctx context.Context)
 		return pg.Terminate(ctx)
 	}
 
-	uri := p.noAuthURI()
-	if err := waitForRedis(ctx, uri); err != nil {
-		return closeFunc, err
+	if err := p.WaitForStart(ctx, timeout); err != nil {
+		return nil, err
 	}
 
-	return closeFunc, p.setAuth(ctx, uri)
+	return closeFunc, p.setAuth(ctx, p.noAuthURI())
 }
 
 func (p *Redis) noAuthURI() string {
@@ -142,26 +191,4 @@ func (p *Redis) setAuth(ctx context.Context, url string) error {
 
 	_, err = redis.DoContext(conn, ctx, "ACL", args...)
 	return err
-}
-
-func waitForRedis(ctx context.Context, url string) error {
-	log.Println("Wait for database to boot up")
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
-	for range ticker.C {
-		conn, err := redis.DialURLContext(ctx, url)
-		if err != nil {
-			if err == context.DeadlineExceeded {
-				return err
-			}
-		} else {
-			_ = conn.Close()
-			return nil
-		}
-	}
-	return nil
 }

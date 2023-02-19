@@ -3,12 +3,17 @@ package container
 import (
 	"context"
 	"io"
-	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+)
+
+const (
+	LabelManagedBy = "managed_by"
+	LabelDBctl     = "dbctl"
 )
 
 type Request struct {
@@ -17,6 +22,7 @@ type Request struct {
 	ExposedPorts []string // allow specifying protocol info
 	Cmd          []string
 	Env          map[string]string
+	Labels       map[string]string
 }
 
 type Container struct {
@@ -50,11 +56,19 @@ func Run(ctx context.Context, req Request) (*Container, error) {
 		return nil, err
 	}
 
+	labels := map[string]string{
+		LabelManagedBy: LabelDBctl,
+	}
+	for k, v := range req.Labels {
+		labels[k] = v
+	}
+
 	resp, err := cli.ContainerCreate(ctx, &container.Config{
 		Image:        req.Image,
 		Cmd:          req.Cmd,
 		Env:          env,
 		ExposedPorts: exposedPortSet,
+		Labels:       labels,
 	}, &container.HostConfig{PortBindings: exposedPortMap}, nil, nil, req.Name)
 	if err != nil {
 		return nil, err
@@ -69,40 +83,42 @@ func Run(ctx context.Context, req Request) (*Container, error) {
 }
 
 func (c *Container) Terminate(ctx context.Context) error {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return err
-	}
-
-	err = cli.ContainerRemove(ctx, c.ID, types.ContainerRemoveOptions{
-		RemoveVolumes: true,
-		RemoveLinks:   false,
-		Force:         true,
-	})
-	return err
+	return TerminateByID(ctx, c.ID)
 }
 
-func List(ctx context.Context) ([]*Container, error) {
+func List(ctx context.Context, labels ...filters.KeyValuePair) ([]*Container, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	ff := []filters.KeyValuePair{{Key: LabelManagedBy, Value: LabelDBctl}}
+	ff = append(ff, labels...)
+
+	res, err := cli.ContainerList(ctx, types.ContainerListOptions{
+		Filters: filters.NewArgs(ff...),
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	out := make([]*Container, 0)
 	for _, c := range res {
-		n := c.Names[0]
-		if strings.HasPrefix(n, "/dbctl") {
-			out = append(out, &Container{ID: c.ID, Name: c.Names[0]})
-		}
+		out = append(out, &Container{ID: c.ID, Name: c.Names[0]})
 	}
 	return out, nil
 }
 
-func Remove(ctx context.Context, container *Container) error {
-	return container.Terminate(ctx)
+func TerminateByID(ctx context.Context, id string) error {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return err
+	}
+
+	err = cli.ContainerRemove(ctx, id, types.ContainerRemoveOptions{
+		RemoveVolumes: true,
+		RemoveLinks:   false,
+		Force:         true,
+	})
+	return err
 }

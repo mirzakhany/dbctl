@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/docker/docker/api/types/filters"
 	embedpg "github.com/fergusstrange/embedded-postgres"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jackc/pgx/v4"
@@ -21,10 +22,14 @@ import (
 	// golang migration file driver
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/mirzakhany/dbctl/internal/container"
+	"github.com/mirzakhany/dbctl/internal/database"
 )
 
+var _ database.Database = (*Postgres)(nil)
+
 type Postgres struct {
-	cfg config
+	containerID string
+	cfg         config
 }
 
 func New(options ...Option) (*Postgres, error) {
@@ -45,14 +50,14 @@ func New(options ...Option) (*Postgres, error) {
 	return pg, nil
 }
 
-func (p *Postgres) Start(ctx context.Context) error {
+func (p *Postgres) Start(ctx context.Context, detach bool) error {
 	log.Printf("Starting postgres version %s on port %d ...\n", p.cfg.version, p.cfg.port)
 
 	var err error
 	var closeFunc func(ctx context.Context) error
 
 	if p.cfg.useDockerEngine {
-		closeFunc, err = p.startUsingDocker(ctx)
+		closeFunc, err = p.startUsingDocker(ctx, 20*time.Second)
 	} else {
 		closeFunc, err = p.startUsingNative()
 	}
@@ -75,7 +80,8 @@ func (p *Postgres) Start(ctx context.Context) error {
 	log.Printf("Database uri is: %q\n", p.URI())
 
 	// detach and stop cli if asked
-	if p.cfg.detach {
+	p.cfg.detached = detach
+	if detach {
 		return nil
 	}
 
@@ -90,6 +96,49 @@ func (p *Postgres) Start(ctx context.Context) error {
 	return closeFunc(shutdownCtx)
 }
 
+func (p *Postgres) Stop(ctx context.Context) error {
+	return container.TerminateByID(ctx, p.containerID)
+}
+
+func (p *Postgres) WaitForStart(ctx context.Context, timeout time.Duration) error {
+	log.Println("Wait for database to boot up")
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	for range ticker.C {
+		conn, err := pgx.Connect(ctx, p.URI())
+		if err != nil {
+			if err == context.DeadlineExceeded {
+				return err
+			}
+		} else {
+			_ = conn.Close(context.Background())
+			return nil
+		}
+	}
+	return nil
+}
+
+func Instances(ctx context.Context) ([]database.Info, error) {
+	l, err := container.List(ctx, filters.KeyValuePair{Key: database.LabelType, Value: database.LabelPostgres})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]database.Info, 0, len(l))
+	for _, c := range l {
+		out = append(out, database.Info{
+			ID:     c.ID,
+			Type:   c.Name,
+			Status: database.Running,
+		})
+	}
+	return out, nil
+}
+
 func (p *Postgres) startUsingNative() (func(ctx context.Context) error, error) {
 	config := embedpg.DefaultConfig().
 		Locale("en_US.UTF-8").
@@ -100,19 +149,19 @@ func (p *Postgres) startUsingNative() (func(ctx context.Context) error, error) {
 		Port(p.cfg.port).
 		Logger(p.cfg.logger)
 
-	database := embedpg.NewDatabase(config)
+	pg := embedpg.NewDatabase(config)
 	closeFunc := func(ctx context.Context) error {
-		return database.Stop()
+		return pg.Stop()
 	}
 
-	if err := database.Start(); err != nil {
+	if err := pg.Start(); err != nil {
 		return closeFunc, err
 	}
 
 	return closeFunc, nil
 }
 
-func (p *Postgres) startUsingDocker(ctx context.Context) (func(ctx context.Context) error, error) {
+func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) (func(ctx context.Context) error, error) {
 	var rnd, err = rand.Int(rand.Reader, big.NewInt(20))
 	if err != nil {
 		return nil, err
@@ -129,16 +178,19 @@ func (p *Postgres) startUsingDocker(ctx context.Context) (func(ctx context.Conte
 		Cmd:          []string{"postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"},
 		ExposedPorts: []string{fmt.Sprintf("%s:5432/tcp", port)},
 		Name:         fmt.Sprintf("dbctl_pg_%d_%d", time.Now().Unix(), rnd.Uint64()),
+		Labels:       map[string]string{database.LabelType: database.LabelPostgres},
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	p.containerID = pg.ID
+
 	closeFunc := func(ctx context.Context) error {
 		return pg.Terminate(ctx)
 	}
 
-	return closeFunc, WaitForPostgres(ctx, p.URI())
+	return closeFunc, p.WaitForStart(ctx, timeout)
 }
 
 func (p *Postgres) URI() string {
@@ -181,28 +233,6 @@ func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error
 
 		if _, err := conn.Exec(ctx, string(b)); err != nil {
 			return fmt.Errorf("applying fixture file (%s) failed: %w", f, err)
-		}
-	}
-	return nil
-}
-
-func WaitForPostgres(ctx context.Context, url string) error {
-	log.Println("Wait for database to boot up")
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
-	for range ticker.C {
-		conn, err := pgx.Connect(ctx, url)
-		if err != nil {
-			if err == context.DeadlineExceeded {
-				return err
-			}
-		} else {
-			_ = conn.Close(context.Background())
-			return nil
 		}
 	}
 	return nil

@@ -13,7 +13,7 @@ type config struct {
 	dbIndex int
 	version string
 
-	detach bool
+	detached bool
 
 	logger          io.Writer
 	useDockerEngine bool
@@ -67,13 +67,6 @@ func getVersions() []string {
 func WithLogger(logger io.Writer) Option {
 	return func(c *config) error {
 		c.logger = logger
-		return nil
-	}
-}
-
-func WithDetach(detach bool) Option {
-	return func(c *config) error {
-		c.detach = detach
 		return nil
 	}
 }

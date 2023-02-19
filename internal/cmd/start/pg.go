@@ -1,10 +1,11 @@
-package cmd
+package start
 
 import (
 	"fmt"
 	"io"
 
-	"github.com/mirzakhany/dbctl/internal/pg"
+	pg "github.com/mirzakhany/dbctl/internal/database/postgres"
+	"github.com/mirzakhany/dbctl/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -81,13 +82,12 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 		pg.WithLogger(io.Discard),
 		pg.WithMigrations(migrationsPath),
 		pg.WithFixtures(fixturesPath),
-		pg.WithDetach(detach),
 	)
 	if err != nil {
 		return err
 	}
 
-	if err := db.Start(contextWithOsSignal()); err != nil {
+	if err := db.Start(utils.ContextWithOsSignal(), detach); err != nil {
 		return err
 	}
 

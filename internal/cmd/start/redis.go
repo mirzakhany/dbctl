@@ -1,11 +1,11 @@
-package cmd
+package start
 
 import (
 	"fmt"
 	"io"
 
-	"github.com/mirzakhany/dbctl/internal/redis"
-
+	"github.com/mirzakhany/dbctl/internal/database/redis"
+	"github.com/mirzakhany/dbctl/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -62,13 +62,12 @@ func runRedis(cmd *cobra.Command, args []string) error {
 		redis.WithHost(user, pass, dbIndex, port),
 		redis.WithVersion(redisVersion),
 		redis.WithLogger(io.Discard),
-		redis.WithDetach(detach),
 	)
 	if err != nil {
 		return err
 	}
 
-	if err := db.Start(contextWithOsSignal()); err != nil {
+	if err := db.Start(utils.ContextWithOsSignal(), detach); err != nil {
 		return err
 	}
 
