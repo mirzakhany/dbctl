@@ -15,7 +15,7 @@ type config struct {
 	port    uint32
 	version string
 
-	detach bool
+	detached bool
 
 	logger io.Writer
 
@@ -149,13 +149,6 @@ func WithFixtures(path string) Option {
 			// TODO check fixtures file for format and template
 			c.fixtureFiles = append(c.fixtureFiles, filepath.Join(absPath, f.Name()))
 		}
-		return nil
-	}
-}
-
-func WithDetach(detach bool) Option {
-	return func(c *config) error {
-		c.detach = detach
 		return nil
 	}
 }

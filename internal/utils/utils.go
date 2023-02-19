@@ -1,4 +1,4 @@
-package cmd
+package utils
 
 import (
 	"context"
@@ -7,13 +7,13 @@ import (
 	"syscall"
 )
 
-var defaultExistSignals = []os.Signal{syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT}
+var DefaultExistSignals = []os.Signal{syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT}
 
-// contextWithOsSignal returns a context with by default is listening to
+// ContextWithOsSignal returns a context with by default is listening to
 // SIGHUP, SIGINT, SIGTERM, SIGQUIT os signals to cancel
-func contextWithOsSignal(sig ...os.Signal) context.Context {
+func ContextWithOsSignal(sig ...os.Signal) context.Context {
 	if len(sig) == 0 {
-		sig = defaultExistSignals
+		sig = DefaultExistSignals
 	}
 
 	s := make(chan os.Signal, 1)
@@ -26,7 +26,7 @@ func contextWithOsSignal(sig ...os.Signal) context.Context {
 	return ctx
 }
 
-func contain(src []string, target, alias string) bool {
+func Contain(src []string, target, alias string) bool {
 	for _, s := range src {
 		if s == target || s == alias {
 			return true

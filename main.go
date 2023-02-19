@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mirzakhany/dbctl/internal/cmd/start"
+
 	"github.com/mirzakhany/dbctl/internal/cmd"
 )
 
@@ -17,10 +19,8 @@ func main() {
 	root := cmd.GetRootCmd(version)
 	root.SetVersionTemplate(fmt.Sprintf("dbctl version %s\n", version))
 
-	root.AddCommand(cmd.GetStartCmd())
+	root.AddCommand(start.GetStartCmd())
 	root.AddCommand(cmd.GetStopCmd())
-	root.AddCommand(cmd.GetUpCmd())
-	root.AddCommand(cmd.GetDownCmd())
 	root.AddCommand(cmd.GetSelfUpdateCmd(version))
 
 	if err := root.Execute(); err != nil {
