@@ -1,9 +1,8 @@
 package database
 
 import (
+	"context"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 type Status int
@@ -14,11 +13,9 @@ const (
 )
 
 const (
-	LabelManagedBy = "managed_by"
-	LabelType      = "dbctl_type"
-	LabelDBctl     = "dbctl"
-	LabelPostgres  = "postgres"
-	LabelRedis     = "redis"
+	LabelType     = "dbctl_type"
+	LabelPostgres = "postgres"
+	LabelRedis    = "redis"
 )
 
 type Info struct {
@@ -31,6 +28,5 @@ type Database interface {
 	Start(ctx context.Context, detach bool) error
 	Stop(ctx context.Context) error
 	WaitForStart(ctx context.Context, timeout time.Duration) error
-	// Instances(ctx context.Context) ([]Info, error)
 	URI() string
 }
