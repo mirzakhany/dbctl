@@ -19,14 +19,12 @@ type config struct {
 
 	logger io.Writer
 
-	migrationsPath  string
-	fixtureFiles    []string
-	useDockerEngine bool
+	migrationsPath string
+	fixtureFiles   []string
 }
 
 var (
-	supportedNativeVersions = []string{"14.3.0", "13.7.0", "12.11.0", "11.16.0", "10.21.0", "9.6.24"}
-	supportedDockerVersions = map[string]string{
+	supportedVersions = map[string]string{
 		"10.3.2": "postgis/postgis:10-3.2-alpine",
 		"11.2.5": "postgis/postgis:11-2.5-alpine",
 		"11.3.2": "postgis/postgis:11-3.2-alpine",
@@ -54,14 +52,10 @@ func WithVersion(version string) Option {
 	vv := strings.TrimSpace(version)
 	return func(c *config) error {
 		if vv == "" {
-			if c.useDockerEngine {
-				c.version = "13-3.1"
-			} else {
-				c.version = "13.7.0"
-			}
+			c.version = "13-3.1"
 			return nil
 		}
-		versions := getVersions(c.useDockerEngine)
+		versions := getVersions()
 		for _, v := range versions {
 			if v == vv {
 				c.version = version
@@ -72,15 +66,12 @@ func WithVersion(version string) Option {
 	}
 }
 
-func getVersions(useDocker bool) []string {
+func getVersions() []string {
 	out := make([]string, 0)
-	if useDocker {
-		for k := range supportedDockerVersions {
-			out = append(out, k)
-		}
-		return out
+	for k := range supportedVersions {
+		out = append(out, k)
 	}
-	return supportedNativeVersions
+	return out
 }
 
 func WithLogger(logger io.Writer) Option {
@@ -106,13 +97,6 @@ func WithMigrations(path string) Option {
 		}
 
 		c.migrationsPath = "file://" + absPath
-		return nil
-	}
-}
-
-func WithDockerEngine(useDocker bool) Option {
-	return func(c *config) error {
-		c.useDockerEngine = useDocker
 		return nil
 	}
 }
@@ -154,7 +138,7 @@ func WithFixtures(path string) Option {
 }
 
 func getPostGisImage(version string) string {
-	if v, ok := supportedDockerVersions[version]; ok {
+	if v, ok := supportedVersions[version]; ok {
 		return v
 	}
 	// fallback to odidev/postgis:13-3.1
