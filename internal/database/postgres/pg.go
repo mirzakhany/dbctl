@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/filters"
-	embedpg "github.com/fergusstrange/embedded-postgres"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jackc/pgx/v4"
 
@@ -53,14 +52,7 @@ func New(options ...Option) (*Postgres, error) {
 func (p *Postgres) Start(ctx context.Context, detach bool) error {
 	log.Printf("Starting postgres version %s on port %d ...\n", p.cfg.version, p.cfg.port)
 
-	var err error
-	var closeFunc func(ctx context.Context) error
-
-	if p.cfg.useDockerEngine {
-		closeFunc, err = p.startUsingDocker(ctx, 20*time.Second)
-	} else {
-		closeFunc, err = p.startUsingNative()
-	}
+	closeFunc, err := p.startUsingDocker(ctx, 20*time.Second)
 	if err != nil {
 		return err
 	}
@@ -137,28 +129,6 @@ func Instances(ctx context.Context) ([]database.Info, error) {
 		})
 	}
 	return out, nil
-}
-
-func (p *Postgres) startUsingNative() (func(ctx context.Context) error, error) {
-	config := embedpg.DefaultConfig().
-		Locale("en_US.UTF-8").
-		Username(p.cfg.user).
-		Password(p.cfg.pass).
-		Database(p.cfg.name).
-		Version(embedpg.PostgresVersion(p.cfg.version)).
-		Port(p.cfg.port).
-		Logger(p.cfg.logger)
-
-	pg := embedpg.NewDatabase(config)
-	closeFunc := func(ctx context.Context) error {
-		return pg.Stop()
-	}
-
-	if err := pg.Start(); err != nil {
-		return closeFunc, err
-	}
-
-	return closeFunc, nil
 }
 
 func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) (func(ctx context.Context) error, error) {
