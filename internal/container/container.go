@@ -26,8 +26,9 @@ type Request struct {
 }
 
 type Container struct {
-	ID   string
-	Name string
+	ID     string
+	Name   string
+	Labels map[string]string
 }
 
 func Run(ctx context.Context, req Request) (*Container, error) {
@@ -56,9 +57,7 @@ func Run(ctx context.Context, req Request) (*Container, error) {
 		return nil, err
 	}
 
-	labels := map[string]string{
-		LabelManagedBy: LabelDBctl,
-	}
+	labels := map[string]string{LabelManagedBy: LabelDBctl}
 	for k, v := range req.Labels {
 		labels[k] = v
 	}
@@ -86,14 +85,16 @@ func (c *Container) Terminate(ctx context.Context) error {
 	return TerminateByID(ctx, c.ID)
 }
 
-func List(ctx context.Context, labels ...filters.KeyValuePair) ([]*Container, error) {
+func List(ctx context.Context, labels map[string]string) ([]*Container, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
 	}
 
-	ff := []filters.KeyValuePair{{Key: LabelManagedBy, Value: LabelDBctl}}
-	ff = append(ff, labels...)
+	ff := []filters.KeyValuePair{{Key: "label", Value: LabelManagedBy + "=" + LabelDBctl}}
+	for k, v := range labels {
+		ff = append(ff, filters.Arg("label", k+"="+v))
+	}
 
 	res, err := cli.ContainerList(ctx, types.ContainerListOptions{
 		Filters: filters.NewArgs(ff...),
@@ -104,7 +105,7 @@ func List(ctx context.Context, labels ...filters.KeyValuePair) ([]*Container, er
 
 	out := make([]*Container, 0)
 	for _, c := range res {
-		out = append(out, &Container{ID: c.ID, Name: c.Names[0]})
+		out = append(out, &Container{ID: c.ID, Name: c.Names[0], Labels: c.Labels})
 	}
 	return out, nil
 }

@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/docker/docker/api/types/filters"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jackc/pgx/v4"
 
@@ -115,7 +114,7 @@ func (p *Postgres) WaitForStart(ctx context.Context, timeout time.Duration) erro
 }
 
 func Instances(ctx context.Context) ([]database.Info, error) {
-	l, err := container.List(ctx, filters.KeyValuePair{Key: database.LabelType, Value: database.LabelPostgres})
+	l, err := container.List(ctx, map[string]string{database.LabelType: database.LabelPostgres})
 	if err != nil {
 		return nil, err
 	}
