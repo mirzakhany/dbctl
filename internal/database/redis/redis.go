@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/docker/docker/api/types/filters"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
@@ -97,7 +96,7 @@ func (p *Redis) WaitForStart(ctx context.Context, timeout time.Duration) error {
 }
 
 func Instances(ctx context.Context) ([]database.Info, error) {
-	l, err := container.List(ctx, filters.KeyValuePair{Key: database.LabelType, Value: database.LabelRedis})
+	l, err := container.List(ctx, map[string]string{database.LabelType: database.LabelRedis})
 	if err != nil {
 		return nil, err
 	}

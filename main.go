@@ -21,6 +21,7 @@ func main() {
 
 	root.AddCommand(start.GetStartCmd())
 	root.AddCommand(cmd.GetStopCmd())
+	root.AddCommand(cmd.GetListCmd())
 	root.AddCommand(cmd.GetSelfUpdateCmd(version))
 
 	if err := root.Execute(); err != nil {
