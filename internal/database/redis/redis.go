@@ -119,7 +119,7 @@ func (p *Redis) startUsingDocker(ctx context.Context, timeout time.Duration) (fu
 	}
 
 	port := strconv.Itoa(int(p.cfg.port))
-	pg, err := container.Run(ctx, container.Request{
+	pg, err := container.Run(ctx, container.CreateRequest{
 		Image: getRedisImage(p.cfg.version),
 		Cmd: []string{
 			"redis-server",

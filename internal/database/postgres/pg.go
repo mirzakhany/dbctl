@@ -137,7 +137,7 @@ func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) 
 	}
 
 	port := strconv.Itoa(int(p.cfg.port))
-	pg, err := container.Run(ctx, container.Request{
+	pg, err := container.Run(ctx, container.CreateRequest{
 		Image: getPostGisImage(p.cfg.version),
 		Env: map[string]string{
 			"POSTGRES_PASSWORD": p.cfg.pass,
