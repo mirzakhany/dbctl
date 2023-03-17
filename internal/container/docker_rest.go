@@ -13,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/docker/go-connections/nat"
 )
@@ -20,13 +21,6 @@ import (
 const (
 	LabelManagedBy = "managed_by"
 	LabelDBctl     = "dbctl"
-)
-
-var (
-	ErrNotFound   = errors.New("container not found")
-	ErrNotRunning = errors.New("container is not running")
-	ErrBadRequest = errors.New("bad request")
-	ErrServer     = errors.New("server error")
 )
 
 func Run(ctx context.Context, req CreateRequest) (*Container, error) {
@@ -74,7 +68,7 @@ func StartContainer(ctx context.Context, id string) error {
 		return err
 	}
 
-	return mapError(res.StatusCode)
+	return mapError(res)
 }
 
 func CreateContainer(ctx context.Context, params CreateRequest) (string, error) {
@@ -107,6 +101,14 @@ func CreateContainer(ctx context.Context, params CreateRequest) (string, error) 
 		HostConfig:   HostConfig{PortBindings: exposedPortMap},
 	}
 
+	for _, pm := range exposedPortMap {
+		for _, port := range pm {
+			if !isPortFree(port.HostPort) {
+				return "", fmt.Errorf("port: '%s' is already taken", port.HostPort)
+			}
+		}
+	}
+
 	data, err := json.Marshal(req)
 	if err != nil {
 		return "", err
@@ -115,6 +117,10 @@ func CreateContainer(ctx context.Context, params CreateRequest) (string, error) 
 	path := fmt.Sprintf("/%s/containers/create?name=%s", apiVersion, params.Name)
 	res, err := callDockerApi(ctx, http.MethodPost, path, bytes.NewReader(data))
 	if err != nil {
+		return "", err
+	}
+
+	if err := mapError(res); err != nil {
 		return "", err
 	}
 
@@ -129,7 +135,7 @@ func CreateContainer(ctx context.Context, params CreateRequest) (string, error) 
 		return "", fmt.Errorf("read docker response failed: %w", err)
 	}
 
-	return re.ID, mapError(res.StatusCode)
+	return re.ID, nil
 }
 
 func PullImage(ctx context.Context, image string) error {
@@ -144,7 +150,7 @@ func PullImage(ctx context.Context, image string) error {
 		return err
 	}
 
-	return mapError(res.StatusCode)
+	return mapError(res)
 }
 
 func List(ctx context.Context, labels map[string]string) ([]*Container, error) {
@@ -166,7 +172,11 @@ func List(ctx context.Context, labels map[string]string) ([]*Container, error) {
 	path := fmt.Sprintf("/%s/containers/json?limit=0&filters=%s", apiVersion, f)
 	res, err := callDockerApi(ctx, http.MethodGet, path, nil)
 	if err != nil {
-		return nil, mapError(res.StatusCode)
+		return nil, err
+	}
+
+	if err := mapError(res); err != nil {
+		return nil, err
 	}
 
 	d, err := io.ReadAll(res.Body)
@@ -221,7 +231,7 @@ func RemoveContainer(ctx context.Context, id string) error {
 		return err
 	}
 
-	return mapError(res.StatusCode)
+	return mapError(res)
 }
 
 func KillContainer(ctx context.Context, id string) error {
@@ -235,21 +245,31 @@ func KillContainer(ctx context.Context, id string) error {
 		return err
 	}
 
-	return mapError(res.StatusCode)
+	return mapError(res)
 }
 
-func mapError(statusCode int) error {
-	switch statusCode {
+type errMessage struct {
+	Message string `json:"message"`
+}
+
+func mapError(res *http.Response) error {
+	switch res.StatusCode {
 	case http.StatusNoContent, http.StatusOK, http.StatusCreated:
 		return nil
-	case http.StatusBadRequest:
-		return ErrBadRequest
-	case http.StatusNotFound:
-		return ErrNotFound
-	case http.StatusConflict:
-		return ErrNotRunning
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict:
+		d, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+
+		o := errMessage{}
+		if err := json.Unmarshal(d, &o); err != nil {
+			return err
+		}
+
+		return errors.New(o.Message)
 	default:
-		return ErrServer
+		return nil
 	}
 }
 
@@ -374,4 +394,18 @@ func parseHostURL(host string) (*url.URL, error) {
 		Host:   addr,
 		Path:   basePath,
 	}, nil
+}
+
+func isPortFree(port string) bool {
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort("", port), 3*time.Second)
+	if err != nil {
+		return true
+	} else {
+		if conn != nil {
+			_ = conn.Close()
+			return false
+		} else {
+			return true
+		}
+	}
 }

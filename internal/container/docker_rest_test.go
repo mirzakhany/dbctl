@@ -2,19 +2,23 @@ package container
 
 import (
 	"context"
+	"crypto/rand"
+	"fmt"
+	"math/big"
 	"testing"
+	"time"
 )
 
 func Test_StartContainer(t *testing.T) {
 	id, err := CreateContainer(context.Background(), CreateRequest{
-		Name: "test-bbbbb-dfdfd",
+		Name: "test-rrr-00",
 		Env: map[string]string{
 			"POSTGRES_PASSWORD": "test",
 			"POSTGRES_USER":     "test",
 			"POSTGRES_DB":       "test",
 		},
 		Image:        "odidev/postgis:13-3.1-alpine",
-		ExposedPorts: []string{"8345:5432/tcp"},
+		ExposedPorts: []string{"65436:5432/tcp"},
 		Cmd:          []string{"postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"},
 		Labels:       map[string]string{"foo": "bar"},
 	})
@@ -29,15 +33,20 @@ func Test_StartContainer(t *testing.T) {
 }
 
 func Test_CreateContainer(t *testing.T) {
-	_, err := CreateContainer(context.Background(), CreateRequest{
-		Name: "test-cnt-0001",
+	var rnd, err = rand.Int(rand.Reader, big.NewInt(20))
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = CreateContainer(context.Background(), CreateRequest{
+		Name: fmt.Sprintf("dbctl_rs_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Env: map[string]string{
 			"POSTGRES_PASSWORD": "test",
 			"POSTGRES_USER":     "test",
 			"POSTGRES_DB":       "test",
 		},
 		Image:        "odidev/postgis:13-3.1-alpine",
-		ExposedPorts: []string{"8345:5432/tcp"},
+		ExposedPorts: []string{"65436:5432/tcp"},
 		Cmd:          []string{"postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"},
 		Labels:       map[string]string{"foo": "bar"},
 	})
