@@ -3,6 +3,7 @@ package pg
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"fmt"
 	"log"
 	"math/big"
@@ -13,8 +14,6 @@ import (
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/jackc/pgx/v4"
-
 	// golang migration postgres driver
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	// golang migration file driver
@@ -100,13 +99,13 @@ func (p *Postgres) WaitForStart(ctx context.Context, timeout time.Duration) erro
 	defer cancel()
 
 	for range ticker.C {
-		conn, err := pgx.Connect(ctx, p.URI())
+		conn, err := dbConnect(ctx, p.URI())
 		if err != nil {
 			if err == context.DeadlineExceeded {
 				return err
 			}
 		} else {
-			_ = conn.Close(context.Background())
+			_ = conn.Close()
 			return nil
 		}
 	}
@@ -186,12 +185,12 @@ func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error
 	}
 
 	log.Println("Applying fixtures ...")
-	conn, err := pgx.Connect(ctx, uri)
+	conn, err := dbConnect(ctx, uri)
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
 	}
 	defer func() {
-		_ = conn.Close(ctx)
+		_ = conn.Close()
 	}()
 
 	for _, f := range fixtureFiles {
@@ -200,9 +199,21 @@ func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error
 			return fmt.Errorf("read fixture file (%s) failed: %w", f, err)
 		}
 
-		if _, err := conn.Exec(ctx, string(b)); err != nil {
+		if _, err := conn.Exec(string(b)); err != nil {
 			return fmt.Errorf("applying fixture file (%s) failed: %w", f, err)
 		}
 	}
 	return nil
+}
+
+func dbConnect(ctx context.Context, uri string) (*sql.DB, error) {
+	conn, err := sql.Open("postgres", uri)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := conn.PingContext(ctx); err != nil {
+		return nil, err
+	}
+	return conn, nil
 }
