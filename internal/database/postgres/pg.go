@@ -13,11 +13,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	// golang migration postgres driver
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	// golang migration file driver
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	// golang postgres driver
+	_ "github.com/lib/pq"
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
 )
@@ -57,7 +54,7 @@ func (p *Postgres) Start(ctx context.Context, detach bool) error {
 
 	log.Println("Postgres is up and running")
 	// run migrations if exist
-	if err := RunMigrations(p.cfg.migrationsPath, p.URI()); err != nil {
+	if err := RunMigrations(ctx, p.cfg.migrationsFiles, p.URI()); err != nil {
 		return err
 	}
 
@@ -166,17 +163,13 @@ func (p *Postgres) URI() string {
 	return (&url.URL{Scheme: "postgres", User: url.UserPassword(p.cfg.user, p.cfg.pass), Host: host, Path: p.cfg.name, RawQuery: "sslmode=disable"}).String()
 }
 
-func RunMigrations(migrationsPath, uri string) error {
-	if len(migrationsPath) == 0 {
+func RunMigrations(ctx context.Context, migrationsFiles []string, uri string) error {
+	if migrationsFiles == nil {
 		return nil
 	}
 
 	log.Println("Applying migrations ...")
-	m, err := migrate.New(migrationsPath, uri)
-	if err != nil {
-		return fmt.Errorf("run migrations failed %w", err)
-	}
-	return m.Up()
+	return applySql(ctx, migrationsFiles, uri)
 }
 
 func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error {
@@ -185,6 +178,10 @@ func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error
 	}
 
 	log.Println("Applying fixtures ...")
+	return applySql(ctx, fixtureFiles, uri)
+}
+
+func applySql(ctx context.Context, stmts []string, uri string) error {
 	conn, err := dbConnect(ctx, uri)
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
@@ -193,14 +190,14 @@ func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error
 		_ = conn.Close()
 	}()
 
-	for _, f := range fixtureFiles {
+	for _, f := range stmts {
 		b, err := os.ReadFile(f)
 		if err != nil {
-			return fmt.Errorf("read fixture file (%s) failed: %w", f, err)
+			return fmt.Errorf("read file (%s) failed: %w", f, err)
 		}
 
 		if _, err := conn.Exec(string(b)); err != nil {
-			return fmt.Errorf("applying fixture file (%s) failed: %w", f, err)
+			return fmt.Errorf("applying file (%s) failed: %w", f, err)
 		}
 	}
 	return nil

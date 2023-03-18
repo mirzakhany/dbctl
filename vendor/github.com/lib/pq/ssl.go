@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"strings"
 )
 
 // ssl generates a function to upgrade a net.Conn based on the "sslmode" and
@@ -51,16 +50,6 @@ func ssl(o values) (func(net.Conn) (net.Conn, error), error) {
 		return nil, fmterrorf(`unsupported sslmode %q; only "require" (default), "verify-full", "verify-ca", and "disable" supported`, mode)
 	}
 
-	// Set Server Name Indication (SNI), if enabled by connection parameters.
-	// By default SNI is on, any value which is not starting with "1" disables
-	// SNI -- that is the same check vanilla libpq uses.
-	if sslsni := o["sslsni"]; sslsni == "" || strings.HasPrefix(sslsni, "1") {
-		// RFC 6066 asks to not set SNI if the host is a literal IP address (IPv4
-		// or IPv6). This check is coded already crypto.tls.hostnameInSNI, so
-		// just always set ServerName here and let crypto/tls do the filtering.
-		tlsConf.ServerName = o["host"]
-	}
-
 	err := sslClientCertificates(&tlsConf, o)
 	if err != nil {
 		return nil, err
@@ -69,6 +58,9 @@ func ssl(o values) (func(net.Conn) (net.Conn, error), error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// This pseudo-parameter is not recognized by the PostgreSQL server, so let's delete it after use.
+	delete(o, "sslinline")
 
 	// Accept renegotiation requests initiated by the backend.
 	//
@@ -97,6 +89,9 @@ func sslClientCertificates(tlsConf *tls.Config, o values) error {
 	sslinline := o["sslinline"]
 	if sslinline == "true" {
 		cert, err := tls.X509KeyPair([]byte(o["sslcert"]), []byte(o["sslkey"]))
+		// Clear out these params, in case they were to be sent to the PostgreSQL server by mistake
+		o["sslcert"] = ""
+		o["sslkey"] = ""
 		if err != nil {
 			return err
 		}
@@ -162,6 +157,8 @@ func sslCertificateAuthority(tlsConf *tls.Config, o values) error {
 
 		var cert []byte
 		if sslinline == "true" {
+			// // Clear out this param, in case it were to be sent to the PostgreSQL server by mistake
+			o["sslrootcert"] = ""
 			cert = []byte(sslrootcert)
 		} else {
 			var err error
