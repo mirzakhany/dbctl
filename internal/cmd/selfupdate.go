@@ -51,7 +51,7 @@ func doSelfUpdate(version string) error {
 		return errors.New("parse version failed")
 	}
 
-	if !v.Less(latest) {
+	if latest.Greater(v) {
 		log.Printf("Current version (%s) is the latest\n", v)
 		return nil
 	}

@@ -203,7 +203,8 @@ func List(ctx context.Context, labels map[string]string) ([]*Container, error) {
 }
 
 type filters struct {
-	Label map[string]bool `json:"label"`
+	Status map[string][]string `json:"status"`
+	Label  map[string]bool     `json:"label"`
 }
 
 func encodeFilters(args map[string]string) (string, error) {
@@ -227,20 +228,6 @@ func RemoveContainer(ctx context.Context, id string) error {
 
 	path := fmt.Sprintf("/%s/containers/%s/kill?v=true&force=true&link=false", apiVersion, id)
 	res, err := callDockerApi(ctx, http.MethodPost, path, nil)
-	if err != nil {
-		return err
-	}
-
-	return mapError(res)
-}
-
-func KillContainer(ctx context.Context, id string) error {
-	apiVersion, err := getAPIVersion(ctx)
-	if err != nil {
-		return err
-	}
-
-	res, err := callDockerApi(ctx, http.MethodPost, fmt.Sprintf("/%s/containers/%s/kill", apiVersion, id), nil)
 	if err != nil {
 		return err
 	}

@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 )
 
@@ -39,20 +38,6 @@ type Updater struct {
 	execFileName string
 }
 
-type Version struct {
-	Major uint64
-	Minor uint64
-	Patch uint64
-}
-
-func (v *Version) Less(target *Version) bool {
-	return v.Major < target.Major && v.Minor < target.Major && v.Patch < target.Patch
-}
-
-func (v *Version) String() string {
-	return fmt.Sprintf("v%d.%d.%d", v.Major, v.Minor, v.Patch)
-}
-
 func New(owner, repo, execFileName string) *Updater {
 	return &Updater{
 		releaseURL:   fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo),
@@ -71,7 +56,7 @@ func (u *Updater) Update(ctx context.Context) error {
 		return err
 	}
 
-	if len(release.Assets) == 1 {
+	if len(release.Assets) != 1 {
 		return errors.New("no release found for your platform")
 	}
 
@@ -80,13 +65,13 @@ func (u *Updater) Update(ctx context.Context) error {
 	filename := filepath.Base(targetPath)
 
 	// Download the latest update to tmp dir
-	dest := path.Join("/tmp", asset.Name)
+	assetTarFile := path.Join("/tmp", asset.Name)
 	if err := downloadAsset(ctx, asset.BrowserDownloadURL, path.Join("/tmp", asset.Name)); err != nil {
 		return err
 	}
 
 	downloadDest := path.Join("/tmp", asset.Name[:strings.Index(asset.Name, ".")])
-	if err := extractTarGz(dest, downloadDest); err != nil {
+	if err := extractTarGz(assetTarFile, downloadDest); err != nil {
 		return err
 	}
 
@@ -139,6 +124,7 @@ func (u *Updater) Update(ctx context.Context) error {
 
 	// Clean up download dir
 	_ = os.RemoveAll(downloadDest)
+	_ = os.RemoveAll(assetTarFile)
 	return nil
 }
 
@@ -244,6 +230,7 @@ func extractTarGz(source, dest string) error {
 		return err
 	}
 
+	// FIXME only extract the executable file
 	tarReader := tar.NewReader(uncompressedStream)
 	for {
 		header, err := tarReader.Next()
@@ -275,42 +262,4 @@ func extractTarGz(source, dest string) error {
 		}
 	}
 	return nil
-}
-
-func ParseVersion(v string) (*Version, error) {
-	m := versionRegex.FindStringSubmatch(v)
-	if m == nil {
-		return nil, errors.New("ErrInvalidSemver")
-	}
-
-	out := &Version{
-		Major: 0,
-		Minor: 0,
-		Patch: 0,
-	}
-
-	var err error
-	out.Major, err = strconv.ParseUint(m[1], 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing version segment: %s", err)
-	}
-
-	if m[2] != "" {
-		out.Minor, err = strconv.ParseUint(strings.TrimPrefix(m[2], "."), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing version segment: %s", err)
-		}
-	} else {
-		out.Minor = 0
-	}
-
-	if m[3] != "" {
-		out.Patch, err = strconv.ParseUint(strings.TrimPrefix(m[3], "."), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing version segment: %s", err)
-		}
-	} else {
-		out.Patch = 0
-	}
-	return out, nil
 }
