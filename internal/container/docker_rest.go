@@ -283,14 +283,6 @@ func getAPIVersion(ctx context.Context) (string, error) {
 	return "v" + data.ApiVersion, nil
 }
 
-func isDockerRunning(ctx context.Context) bool {
-	res, err := callDockerApi(ctx, http.MethodGet, "/v1.20/version", nil)
-	if err != nil || res.StatusCode != http.StatusOK {
-		return false
-	}
-	return true
-}
-
 func callDockerApi(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
 	addr, err := getDockerAddr()
 	if err != nil {
