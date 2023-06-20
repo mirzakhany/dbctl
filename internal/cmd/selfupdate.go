@@ -40,7 +40,7 @@ func doSelfUpdate(version string) error {
 		v = vv
 	} else {
 		vr := strings.Split(version, "-")[0]
-		vv, err := selfupdate.ParseVersion(vr[1:])
+		vv, err := selfupdate.ParseVersion(vr)
 		if err != nil {
 			return err
 		}
