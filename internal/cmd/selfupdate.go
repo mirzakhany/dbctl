@@ -2,16 +2,15 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"log"
 	"os"
 	"strings"
 
-	"github.com/blang/semver"
-	"github.com/rhysd/go-github-selfupdate/selfupdate"
+	"github.com/mirzakhany/dbctl/internal/selfupdate"
+	"github.com/mirzakhany/dbctl/internal/utils"
 	"github.com/spf13/cobra"
 )
-
-const repo = "mirzakhany/dbctl"
 
 func GetSelfUpdateCmd(version string) *cobra.Command {
 	return &cobra.Command{
@@ -24,27 +23,40 @@ func GetSelfUpdateCmd(version string) *cobra.Command {
 }
 
 func doSelfUpdate(version string) error {
-	latest, found, err := selfupdate.DetectLatest(repo)
+	ctx := utils.ContextWithOsSignal()
+
+	updater := selfupdate.New("mirzakhany", "dbctl", "dbctl")
+	latest, err := updater.LatestVersion(ctx)
 	if err != nil {
-		log.Println("Error occurred while detecting version:", err)
 		return err
 	}
 
-	// to make sure self update works from installations from source code.
-	var v semver.Version
+	var v *selfupdate.Version
 	if version == "snapshot" {
-		v = semver.MustParse("0.0.1")
+		vv, err := selfupdate.ParseVersion("0.0.1")
+		if err != nil {
+			return err
+		}
+		v = vv
 	} else {
 		vr := strings.Split(version, "-")[0]
-		v = semver.MustParse(vr[1:])
+		vv, err := selfupdate.ParseVersion(vr[1:])
+		if err != nil {
+			return err
+		}
+		v = vv
 	}
 
-	if !found || latest.Version.LTE(v) {
-		log.Println("Current version is the latest")
-		return err
+	if v == nil {
+		return errors.New("parse version failed")
 	}
 
-	log.Print("Do you want to update to ", latest.Version, "? (y/n): ")
+	if latest.Greater(v) {
+		log.Printf("Current version (%s) is the latest\n", v)
+		return nil
+	}
+
+	log.Print("Do you want to update to ", latest, "? (y/n): ")
 	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil || (input != "y\n" && input != "n\n") {
 		log.Println("Invalid input")
@@ -54,15 +66,10 @@ func doSelfUpdate(version string) error {
 		return nil
 	}
 
-	exe, err := os.Executable()
-	if err != nil {
-		log.Println("Could not locate executable path")
-		return err
-	}
-	if err := selfupdate.UpdateTo(latest.AssetURL, exe); err != nil {
+	if err := updater.Update(ctx); err != nil {
 		log.Println("Error occurred while updating binary:", err)
 		return err
 	}
-	log.Println("Successfully updated to version", latest.Version)
+	log.Println("Successfully updated to version", latest)
 	return nil
 }

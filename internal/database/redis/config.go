@@ -15,8 +15,7 @@ type config struct {
 
 	detached bool
 
-	logger          io.Writer
-	useDockerEngine bool
+	logger io.Writer
 }
 
 var (

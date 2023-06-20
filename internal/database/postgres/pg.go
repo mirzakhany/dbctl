@@ -3,6 +3,7 @@ package pg
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"fmt"
 	"log"
 	"math/big"
@@ -12,13 +13,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/jackc/pgx/v4"
-
-	// golang migration postgres driver
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	// golang migration file driver
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	// golang postgres driver
+	_ "github.com/lib/pq"
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
 )
@@ -58,7 +54,7 @@ func (p *Postgres) Start(ctx context.Context, detach bool) error {
 
 	log.Println("Postgres is up and running")
 	// run migrations if exist
-	if err := RunMigrations(p.cfg.migrationsPath, p.URI()); err != nil {
+	if err := RunMigrations(ctx, p.cfg.migrationsFiles, p.URI()); err != nil {
 		return err
 	}
 
@@ -100,13 +96,13 @@ func (p *Postgres) WaitForStart(ctx context.Context, timeout time.Duration) erro
 	defer cancel()
 
 	for range ticker.C {
-		conn, err := pgx.Connect(ctx, p.URI())
+		conn, err := dbConnect(ctx, p.URI())
 		if err != nil {
 			if err == context.DeadlineExceeded {
 				return err
 			}
 		} else {
-			_ = conn.Close(context.Background())
+			_ = conn.Close()
 			return nil
 		}
 	}
@@ -137,7 +133,7 @@ func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) 
 	}
 
 	port := strconv.Itoa(int(p.cfg.port))
-	pg, err := container.Run(ctx, container.Request{
+	pg, err := container.Run(ctx, container.CreateRequest{
 		Image: getPostGisImage(p.cfg.version),
 		Env: map[string]string{
 			"POSTGRES_PASSWORD": p.cfg.pass,
@@ -167,17 +163,13 @@ func (p *Postgres) URI() string {
 	return (&url.URL{Scheme: "postgres", User: url.UserPassword(p.cfg.user, p.cfg.pass), Host: host, Path: p.cfg.name, RawQuery: "sslmode=disable"}).String()
 }
 
-func RunMigrations(migrationsPath, uri string) error {
-	if len(migrationsPath) == 0 {
+func RunMigrations(ctx context.Context, migrationsFiles []string, uri string) error {
+	if migrationsFiles == nil {
 		return nil
 	}
 
 	log.Println("Applying migrations ...")
-	m, err := migrate.New(migrationsPath, uri)
-	if err != nil {
-		return fmt.Errorf("run migrations failed %w", err)
-	}
-	return m.Up()
+	return applySQL(ctx, migrationsFiles, uri)
 }
 
 func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error {
@@ -186,23 +178,39 @@ func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error
 	}
 
 	log.Println("Applying fixtures ...")
-	conn, err := pgx.Connect(ctx, uri)
+	return applySQL(ctx, fixtureFiles, uri)
+}
+
+func applySQL(ctx context.Context, stmts []string, uri string) error {
+	conn, err := dbConnect(ctx, uri)
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
 	}
 	defer func() {
-		_ = conn.Close(ctx)
+		_ = conn.Close()
 	}()
 
-	for _, f := range fixtureFiles {
+	for _, f := range stmts {
 		b, err := os.ReadFile(f)
 		if err != nil {
-			return fmt.Errorf("read fixture file (%s) failed: %w", f, err)
+			return fmt.Errorf("read file (%s) failed: %w", f, err)
 		}
 
-		if _, err := conn.Exec(ctx, string(b)); err != nil {
-			return fmt.Errorf("applying fixture file (%s) failed: %w", f, err)
+		if _, err := conn.Exec(string(b)); err != nil {
+			return fmt.Errorf("applying file (%s) failed: %w", f, err)
 		}
 	}
 	return nil
+}
+
+func dbConnect(ctx context.Context, uri string) (*sql.DB, error) {
+	conn, err := sql.Open("postgres", uri)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := conn.PingContext(ctx); err != nil {
+		return nil, err
+	}
+	return conn, nil
 }

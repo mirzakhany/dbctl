@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mirzakhany/dbctl/internal/cmd/start"
-
 	"github.com/mirzakhany/dbctl/internal/cmd"
+	"github.com/mirzakhany/dbctl/internal/cmd/start"
 )
 
 // version will be populated by the build script with the sha of the last git commit.

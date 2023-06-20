@@ -27,7 +27,7 @@ func GetRedisCmd() *cobra.Command {
 	return cmd
 }
 
-func runRedis(cmd *cobra.Command, args []string) error {
+func runRedis(cmd *cobra.Command, _ []string) error {
 	port, err := cmd.Flags().GetUint32("port")
 	if err != nil {
 		return fmt.Errorf("invalid port args, %w", err)
@@ -67,9 +67,5 @@ func runRedis(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := db.Start(utils.ContextWithOsSignal(), detach); err != nil {
-		return err
-	}
-
-	return nil
+	return db.Start(utils.ContextWithOsSignal(), detach)
 }

@@ -22,7 +22,7 @@ func GetStopCmd() *cobra.Command {
 	return cmd
 }
 
-func runStop(cmd *cobra.Command, args []string) error {
+func runStop(_ *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return errors.New("invalid args, can be postgres(pg) and/or redis(rs)")
 	}

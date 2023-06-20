@@ -1,11 +1,12 @@
 package cmd
 
 import (
-	"github.com/fatih/color"
+	"os"
+
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
+	"github.com/mirzakhany/dbctl/internal/table"
 	"github.com/mirzakhany/dbctl/internal/utils"
-	"github.com/rodaine/table"
 	"github.com/spf13/cobra"
 )
 
@@ -20,23 +21,19 @@ func GetListCmd() *cobra.Command {
 	return cmd
 }
 
-func runList(cmd *cobra.Command, args []string) error {
-	headerFmt := color.New(color.FgGreen, color.Underline).SprintfFunc()
-	columnFmt := color.New(color.FgYellow).SprintfFunc()
-
-	tbl := table.New("ID", "Name", "Type")
-	tbl.WithHeaderFormatter(headerFmt).WithFirstColumnFormatter(columnFmt)
-
+func runList(_ *cobra.Command, _ []string) error {
 	ctx := utils.ContextWithOsSignal()
 	containers, err := container.List(ctx, nil)
 	if err != nil {
 		return err
 	}
 
+	t := table.New(os.Stdout)
+	t.AddRow("ID", "Name", "Type")
 	for _, c := range containers {
-		tbl.AddRow(c.ID[:12], c.Name, c.Labels[database.LabelType])
+		t.AddRow(c.ID[:12], c.Name, c.Labels[database.LabelType])
 	}
 
-	tbl.Print()
+	t.Print()
 	return nil
 }

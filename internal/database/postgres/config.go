@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -19,8 +20,8 @@ type config struct {
 
 	logger io.Writer
 
-	migrationsPath string
-	fixtureFiles   []string
+	migrationsFiles []string
+	fixtureFiles    []string
 }
 
 var (
@@ -83,58 +84,69 @@ func WithLogger(logger io.Writer) Option {
 
 func WithMigrations(path string) Option {
 	return func(c *config) error {
-		if len(path) == 0 {
-			return nil
-		}
-
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return fmt.Errorf("migraions path %s not exit", path)
-		}
-
-		absPath, err := filepath.Abs(path)
+		files, err := getFiles(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("read migraions failed: %w", err)
 		}
 
-		c.migrationsPath = "file://" + absPath
+		for _, f := range files {
+			// ignore migration down files
+			if strings.HasSuffix(f, "down.sql") {
+				continue
+			}
+			c.migrationsFiles = append(c.migrationsFiles, f)
+		}
+
 		return nil
 	}
 }
 
 func WithFixtures(path string) Option {
 	return func(c *config) error {
-		if len(path) == 0 {
-			return nil
-		}
-
-		stat, err := os.Stat(path)
+		files, err := getFiles(path)
 		if err != nil {
-			return fmt.Errorf("get fixture path information failed, %w", err)
+			return fmt.Errorf("read fixtures failed: %w", err)
 		}
-
-		if !stat.IsDir() {
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				return fmt.Errorf("fixture file %s not exit", path)
-			}
-			c.fixtureFiles = append(c.fixtureFiles, path)
-			return nil
-		}
-
-		files, err := os.ReadDir(path)
-		if err != nil {
-			return err
-		}
-
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			return err
-		}
-		for _, f := range files {
-			// TODO check fixtures file for format and template
-			c.fixtureFiles = append(c.fixtureFiles, filepath.Join(absPath, f.Name()))
-		}
+		c.fixtureFiles = files
 		return nil
 	}
+}
+
+func getFiles(path string) ([]string, error) {
+	if len(path) == 0 {
+		return nil, nil
+	}
+
+	stat, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("get path information failed, %w", err)
+	}
+
+	out := make([]string, 0)
+
+	if !stat.IsDir() {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return nil, fmt.Errorf("file %s not exit", path)
+		}
+		out = append(out, path)
+		return out, nil
+	}
+
+	files, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range files {
+		out = append(out, filepath.Join(absPath, f.Name()))
+	}
+
+	sort.Strings(out)
+	return out, nil
 }
 
 func getPostGisImage(version string) string {

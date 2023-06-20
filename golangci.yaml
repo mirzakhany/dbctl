@@ -1,39 +1,47 @@
 linters:
-  enable:
-    - deadcode
-    - errcheck
-    - govet
-    - ineffassign
-    - typecheck
-    - varcheck
-    - exportloopref
-    - depguard
-    - goconst
-    - gocritic
-    - gocyclo
-    - gofmt
-    - goimports
-    - misspell
-    - nakedret
-    - prealloc
-    - unconvert
-    - gosec
-    - revive
+  enable-all: false
   disable:
-    - unused
-    - structcheck
-    - staticcheck
-    - gosimple
-    - gochecknoinits
     - gochecknoglobals
     - lll
     - maligned
-    - dupl
+    - varnamelen
+    - wrapcheck
+    - testpackage
+    - forbidigo
+    - funlen
+    - exhaustivestruct
+    - paralleltest
+    - nlreturn
+    - wsl
+    - ireturn
+    - containedctx
+    - golint
+    - interfacer
+    - scopelint
+    - godot
+    - nilnil
+    - godox
+    - contextcheck
+    - rowserrcheck
+    - sqlclosecheck
+    - structcheck
+    - wastedassign
+    - ifshort
+    - gomnd
+    - gofumpt
+    - exhaustive
+    - revive
+    - stylecheck
+    - nolintlint
+    - tagliatelle
+    - goconst
+    - deadcode
+    - gocritic
+    - varcheck
 
-linters-settings:
-  errcheck:
-    ignore: fmt:.*
+  linters-settings:
+    errcheck:
+      ignore: fmt:.*
 
-run:
-  modules-download-mode: vendor
-  timeout: 2m
+  run:
+    modules-download-mode: vendor
