@@ -21,7 +21,7 @@ func GetListCmd() *cobra.Command {
 	return cmd
 }
 
-func runList(cmd *cobra.Command, args []string) error {
+func runList(_ *cobra.Command, _ []string) error {
 	ctx := utils.ContextWithOsSignal()
 	containers, err := container.List(ctx, nil)
 	if err != nil {

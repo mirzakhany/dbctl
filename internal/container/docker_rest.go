@@ -63,7 +63,7 @@ func StartContainer(ctx context.Context, id string) error {
 	}
 
 	path := fmt.Sprintf("/%s/containers/%s/start", apiVersion, id)
-	res, err := callDockerApi(ctx, http.MethodPost, path, nil)
+	res, err := callDockerAPI(ctx, http.MethodPost, path, nil)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func CreateContainer(ctx context.Context, params CreateRequest) (string, error) 
 	}
 
 	path := fmt.Sprintf("/%s/containers/create?name=%s", apiVersion, params.Name)
-	res, err := callDockerApi(ctx, http.MethodPost, path, bytes.NewReader(data))
+	res, err := callDockerAPI(ctx, http.MethodPost, path, bytes.NewReader(data))
 	if err != nil {
 		return "", err
 	}
@@ -145,7 +145,7 @@ func PullImage(ctx context.Context, image string) error {
 	}
 
 	path := fmt.Sprintf("/%s/images/create?fromImage=%s", apiVersion, image)
-	res, err := callDockerApi(ctx, http.MethodPost, path, nil)
+	res, err := callDockerAPI(ctx, http.MethodPost, path, nil)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func List(ctx context.Context, labels map[string]string) ([]*Container, error) {
 	}
 
 	path := fmt.Sprintf("/%s/containers/json?limit=0&filters=%s", apiVersion, f)
-	res, err := callDockerApi(ctx, http.MethodGet, path, nil)
+	res, err := callDockerAPI(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +227,7 @@ func RemoveContainer(ctx context.Context, id string) error {
 	}
 
 	path := fmt.Sprintf("/%s/containers/%s/kill?v=true&force=true&link=false", apiVersion, id)
-	res, err := callDockerApi(ctx, http.MethodPost, path, nil)
+	res, err := callDockerAPI(ctx, http.MethodPost, path, nil)
 	if err != nil {
 		return err
 	}
@@ -261,7 +261,7 @@ func mapError(res *http.Response) error {
 }
 
 func getAPIVersion(ctx context.Context) (string, error) {
-	res, err := callDockerApi(ctx, http.MethodGet, "/v1.20/version", nil)
+	res, err := callDockerAPI(ctx, http.MethodGet, "/v1.20/version", nil)
 	if err != nil {
 		return "", err
 	}
@@ -273,17 +273,17 @@ func getAPIVersion(ctx context.Context) (string, error) {
 	defer res.Body.Close()
 
 	data := struct {
-		ApiVersion string `json:"apiVersion"`
+		APIVersion string `json:"apiVersion"`
 	}{}
 
 	if err := json.Unmarshal(body, &data); err != nil {
 		return "", err
 	}
 
-	return "v" + data.ApiVersion, nil
+	return "v" + data.APIVersion, nil
 }
 
-func callDockerApi(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
+func callDockerAPI(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
 	addr, err := getDockerAddr()
 	if err != nil {
 		return nil, err
@@ -383,8 +383,7 @@ func isPortFree(port string) bool {
 		if conn != nil {
 			_ = conn.Close()
 			return false
-		} else {
-			return true
 		}
 	}
+	return true
 }

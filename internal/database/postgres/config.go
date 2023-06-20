@@ -122,7 +122,7 @@ func getFiles(path string) ([]string, error) {
 		return nil, fmt.Errorf("get path information failed, %w", err)
 	}
 
-	var out []string
+	out := make([]string, 0)
 
 	if !stat.IsDir() {
 		if _, err := os.Stat(path); os.IsNotExist(err) {

@@ -169,7 +169,7 @@ func RunMigrations(ctx context.Context, migrationsFiles []string, uri string) er
 	}
 
 	log.Println("Applying migrations ...")
-	return applySql(ctx, migrationsFiles, uri)
+	return applySQL(ctx, migrationsFiles, uri)
 }
 
 func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error {
@@ -178,10 +178,10 @@ func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error
 	}
 
 	log.Println("Applying fixtures ...")
-	return applySql(ctx, fixtureFiles, uri)
+	return applySQL(ctx, fixtureFiles, uri)
 }
 
-func applySql(ctx context.Context, stmts []string, uri string) error {
+func applySQL(ctx context.Context, stmts []string, uri string) error {
 	conn, err := dbConnect(ctx, uri)
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)

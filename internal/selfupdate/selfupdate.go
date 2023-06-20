@@ -70,7 +70,12 @@ func (u *Updater) Update(ctx context.Context) error {
 		return err
 	}
 
-	downloadDest := path.Join("/tmp", asset.Name[:strings.Index(asset.Name, ".")])
+	extIndex := strings.Index(asset.Name, ".")
+	if extIndex != -1 {
+		return errors.New("update failed to find path directory name")
+	}
+
+	downloadDest := path.Join("/tmp", asset.Name[:extIndex])
 	if err := extractTarGz(assetTarFile, downloadDest); err != nil {
 		return err
 	}
@@ -255,7 +260,7 @@ func extractTarGz(source, dest string) error {
 			if _, err := io.Copy(outFile, tarReader); err != nil {
 				return fmt.Errorf("copy failed:%w", err)
 			}
-			outFile.Close()
+			_ = outFile.Close()
 
 		default:
 			return errors.New("unknown file structure")

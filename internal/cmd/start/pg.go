@@ -29,7 +29,7 @@ func GetPgCmd() *cobra.Command {
 	return cmd
 }
 
-func runPostgres(cmd *cobra.Command, args []string) error {
+func runPostgres(cmd *cobra.Command, _ []string) error {
 	port, err := cmd.Flags().GetUint32("port")
 	if err != nil {
 		return fmt.Errorf("invalid port args, %w", err)
@@ -81,9 +81,5 @@ func runPostgres(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := db.Start(utils.ContextWithOsSignal(), detach); err != nil {
-		return err
-	}
-
-	return nil
+	return db.Start(utils.ContextWithOsSignal(), detach)
 }
