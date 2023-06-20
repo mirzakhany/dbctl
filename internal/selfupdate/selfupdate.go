@@ -71,7 +71,7 @@ func (u *Updater) Update(ctx context.Context) error {
 	}
 
 	extIndex := strings.Index(asset.Name, ".")
-	if extIndex != -1 {
+	if extIndex == -1 {
 		return errors.New("update failed to find path directory name")
 	}
 
