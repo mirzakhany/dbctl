@@ -25,7 +25,7 @@ help: ## Display this help.
 
 .PHONY: lint
 lint: ## Lint the code with golang-ci
-	@golangci-lint -c golangci.yaml run
+	docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.53.3 golangci-lint -c golangci.yaml run
 
 .PHONY: test
 test: ## Run tests
