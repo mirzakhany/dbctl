@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	// golang postgres driver
@@ -66,8 +67,16 @@ func (p *Postgres) Start(ctx context.Context, detach bool) error {
 	// print connection url
 	log.Printf("Database uri is: %q\n", p.URI())
 
+	var pgwebCloseFunc database.CloseFunc
+	if p.cfg.withUI {
+		pgwebCloseFunc, err = p.runUI(ctx)
+		if err != nil {
+			_ = closeFunc(ctx)
+			return err
+		}
+	}
+
 	// detach and stop cli if asked
-	p.cfg.detached = detach
 	if detach {
 		return nil
 	}
@@ -79,6 +88,13 @@ func (p *Postgres) Start(ctx context.Context, detach bool) error {
 	defer func() {
 		cancel()
 	}()
+
+	// TODO we need a better solution to manage containers and make sure we remove all of them.
+	if pgwebCloseFunc != nil {
+		if err := pgwebCloseFunc(shutdownCtx); err != nil {
+			return err
+		}
+	}
 
 	return closeFunc(shutdownCtx)
 }
@@ -109,6 +125,38 @@ func (p *Postgres) WaitForStart(ctx context.Context, timeout time.Duration) erro
 	return nil
 }
 
+func (p *Postgres) runUI(ctx context.Context) (database.CloseFunc, error) {
+	log.Println("Starting postgres ui using pgweb (https://github.com/sosedoff/pgweb)")
+
+	var rnd, err = rand.Int(rand.Reader, big.NewInt(20))
+	if err != nil {
+		return nil, err
+	}
+
+	pgweb, err := container.Run(ctx, container.CreateRequest{
+		Image: "sosedoff/pgweb:latest",
+		Env: map[string]string{
+			// replace localhost with docker internal network
+			"PGWEB_DATABASE_URL": strings.ReplaceAll(p.URI(), "localhost", "host.docker.internal"),
+		},
+		ExposedPorts: []string{"8081:8081"},
+		Name:         fmt.Sprintf("dbctl_pgweb_%d_%d", time.Now().Unix(), rnd.Uint64()),
+		Labels:       map[string]string{database.LabelType: database.LabelPGWeb},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// log ui url
+	log.Println("Database UI is running on: http://localhost:8081")
+
+	closeFunc := func(ctx context.Context) error {
+		return pgweb.Terminate(ctx)
+	}
+
+	return closeFunc, nil
+}
+
 func Instances(ctx context.Context) ([]database.Info, error) {
 	l, err := container.List(ctx, map[string]string{database.LabelType: database.LabelPostgres})
 	if err != nil {
@@ -126,7 +174,7 @@ func Instances(ctx context.Context) ([]database.Info, error) {
 	return out, nil
 }
 
-func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) (func(ctx context.Context) error, error) {
+func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) (database.CloseFunc, error) {
 	var rnd, err = rand.Int(rand.Reader, big.NewInt(20))
 	if err != nil {
 		return nil, err
