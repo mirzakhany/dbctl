@@ -7,6 +7,8 @@ import (
 
 type Status int
 
+type CloseFunc func(ctx context.Context) error
+
 const (
 	Running Status = iota
 	Stoped
@@ -15,6 +17,7 @@ const (
 const (
 	LabelType     = "dbctl_type"
 	LabelPostgres = "postgres"
+	LabelPGWeb    = "pgweb"
 	LabelRedis    = "redis"
 )
 

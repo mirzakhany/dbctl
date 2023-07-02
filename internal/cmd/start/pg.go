@@ -40,6 +40,11 @@ func runPostgres(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("invalid detach args, %w", err)
 	}
 
+	withUI, err := cmd.Flags().GetBool("ui")
+	if err != nil {
+		return fmt.Errorf("invalid ui args, %w", err)
+	}
+
 	name, err := cmd.Flags().GetString("name")
 	if err != nil {
 		return fmt.Errorf("invalid name args, %w", err)
@@ -76,6 +81,7 @@ func runPostgres(cmd *cobra.Command, _ []string) error {
 		pg.WithLogger(io.Discard),
 		pg.WithMigrations(migrationsPath),
 		pg.WithFixtures(fixturesPath),
+		pg.WithUI(withUI),
 	)
 	if err != nil {
 		return err

@@ -16,8 +16,7 @@ type config struct {
 	port    uint32
 	version string
 
-	detached bool
-
+	withUI bool
 	logger io.Writer
 
 	migrationsFiles []string
@@ -37,6 +36,13 @@ var (
 )
 
 type Option func(*config) error
+
+func WithUI(withIU bool) Option {
+	return func(c *config) error {
+		c.withUI = withIU
+		return nil
+	}
+}
 
 func WithHost(user, pass, name string, port uint32) Option {
 	return func(c *config) error {
