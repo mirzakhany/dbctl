@@ -150,6 +150,14 @@ func PullImage(ctx context.Context, image string) error {
 		return err
 	}
 
+	if res.StatusCode == http.StatusOK {
+		// read the body to make sure we wait for image to get pulled
+		_, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+	}
+
 	return mapError(res)
 }
 
@@ -306,12 +314,7 @@ func callDockerAPI(ctx context.Context, method, path string, body io.Reader) (*h
 		req.Header.Add("Content-Type", "application/json")
 	}
 
-	req = req.WithContext(ctx)
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	return client.Do(req.WithContext(ctx))
 }
 
 type dockerAddr struct {
