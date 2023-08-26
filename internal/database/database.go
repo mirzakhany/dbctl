@@ -19,6 +19,7 @@ const (
 	LabelPostgres = "postgres"
 	LabelPGWeb    = "pgweb"
 	LabelRedis    = "redis"
+	LabelTesting  = "testing"
 )
 
 type Info struct {
@@ -32,4 +33,18 @@ type Database interface {
 	Stop(ctx context.Context) error
 	WaitForStart(ctx context.Context, timeout time.Duration) error
 	URI() string
+}
+
+type CreateDBRequest struct {
+	Migrations string
+	Fixtures   string
+}
+
+type CreateDBResponse struct {
+	URI string
+}
+
+type Admin interface {
+	CreateDB(ctx context.Context, req *CreateDBRequest) (*CreateDBResponse, error)
+	RemoveDB(ctx context.Context, uri string) error
 }

@@ -18,10 +18,10 @@ func GetPgCmd() *cobra.Command {
 		RunE:    runPostgres,
 	}
 
-	cmd.Flags().Uint32P("port", "p", 15432, "postgres default port")
-	cmd.Flags().StringP("user", "u", "postgres", "Database username")
-	cmd.Flags().String("pass", "postgres", "Database password")
-	cmd.Flags().StringP("name", "n", "postgres", "Database name")
+	cmd.Flags().Uint32P("port", "p", pg.DefaultPort, "postgres default port")
+	cmd.Flags().StringP("user", "u", pg.DefaultUser, "Database username")
+	cmd.Flags().String("pass", pg.DefaultPass, "Database password")
+	cmd.Flags().StringP("name", "n", pg.DefaultName, "Database name")
 	cmd.Flags().StringP("version", "v", "", "Database version, default 14.3.2")
 	cmd.Flags().StringP("migrations", "m", "", "Path to migration files, will be applied if provided")
 	cmd.Flags().StringP("fixtures", "f", "", "Path to fixture files, its can be a file or directory.files in directory will be sorted by name before applying.")

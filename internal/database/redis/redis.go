@@ -16,7 +16,16 @@ import (
 	"github.com/mirzakhany/dbctl/internal/database"
 )
 
-var _ database.Database = (*Redis)(nil)
+var (
+	_ database.Database = (*Redis)(nil)
+	_ database.Admin    = (*Redis)(nil)
+)
+
+const (
+	DefaultPort = 16379
+	DefaultUser = ""
+	DefaultPass = ""
+)
 
 type Redis struct {
 	containerID string
@@ -26,9 +35,9 @@ type Redis struct {
 func New(options ...Option) (*Redis, error) {
 	// create redis with default values
 	rs := &Redis{cfg: config{
-		pass:    "",
-		user:    "",
-		port:    16379,
+		pass:    DefaultPass,
+		user:    DefaultUser,
+		port:    DefaultPort,
 		version: "7.0.4",
 	}}
 
@@ -37,7 +46,18 @@ func New(options ...Option) (*Redis, error) {
 			return nil, err
 		}
 	}
+
 	return rs, nil
+}
+
+func (p *Redis) CreateDB(ctx context.Context, req *database.CreateDBRequest) (*database.CreateDBResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *Redis) RemoveDB(ctx context.Context, uri string) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (p *Redis) Start(ctx context.Context, detach bool) error {
