@@ -1,6 +1,7 @@
 package pg
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -161,4 +162,13 @@ func getPostGisImage(version string) string {
 	}
 	// fallback to odidev/postgis:13-3.1
 	return "odidev/postgis:13-3.1-alpine"
+}
+
+// get hash generate a hash from list of strings
+func getHash(list []string) string {
+	sort.Strings(list)
+	xx := fmt.Sprintf("%x", list)
+	// create md5 hash of xx
+	cc := sha256.Sum256([]byte(xx))
+	return string(cc[:])
 }

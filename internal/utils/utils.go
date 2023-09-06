@@ -2,8 +2,11 @@ package utils
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
 )
 
@@ -33,4 +36,12 @@ func Contain(src []string, target, alias string) bool {
 		}
 	}
 	return false
+}
+
+// GetListHash generate a hash from list of strings
+func GetListHash(list []string) string {
+	sort.Strings(list)
+	// create md5 hash of xx
+	cc := sha256.Sum256([]byte(fmt.Sprintf("%x", list)))
+	return fmt.Sprintf("%x", cc[:])
 }

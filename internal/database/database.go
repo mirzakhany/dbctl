@@ -38,6 +38,8 @@ type Database interface {
 type CreateDBRequest struct {
 	Migrations string
 	Fixtures   string
+
+	WithDefaultConfig bool
 }
 
 type CreateDBResponse struct {

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mirzakhany/dbctl/internal/utils"
+
 	// golang postgres driver
 	_ "github.com/lib/pq"
 	"github.com/mirzakhany/dbctl/internal/container"
@@ -62,7 +64,6 @@ func New(options ...Option) (*Postgres, error) {
 }
 
 func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) (*database.CreateDBResponse, error) {
-	t1 := time.Now()
 	// connect to default database
 	conn, err := dbConnect(ctx, p.URI())
 	if err != nil {
@@ -71,54 +72,57 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 	defer func() {
 		_ = conn.Close()
 	}()
-	t2 := time.Now()
-	fmt.Println("open connection", t2.Sub(t1))
 
 	// create a random name for new database
 	dbName := fmt.Sprintf("dbctl_%d", time.Now().UnixNano())
 	newDB, _ := New(WithHost(p.cfg.user, p.cfg.pass, dbName, p.cfg.port))
 	newURI := newDB.URI()
 
-	// create database
-	// if default is exist, use it as template and create new database
-	if err := p.createDatabaseWithTemplate(ctx, conn, dbName, DefaultTemplate); err == nil {
-		log.Println("database created using template")
-		t3 := time.Now()
-		fmt.Println("create db", t3.Sub(t2))
-		return &database.CreateDBResponse{URI: newURI}, nil
-	} else {
-		if !errors.Is(err, errDatabaseNotExists) {
-			return nil, err
+	if req.WithDefaultConfig {
+		if err = p.createDatabaseWithTemplate(ctx, conn, dbName, DefaultTemplate); err != nil {
+			if errors.Is(err, errDatabaseNotExists) {
+				return nil, fmt.Errorf("default database not found, please create it first: %w", err)
+			}
 		}
 	}
 
-	if _, err := conn.Exec(fmt.Sprintf("create database %s", dbName)); err != nil {
-		return nil, err
-	}
-
+	// new a new database with provided migrations and fixtures
 	if len(req.Migrations) != 0 {
 		// run migrations if exist
 		migrationFiles, err := getFiles(req.Migrations)
 		if err != nil {
 			return nil, fmt.Errorf("read migraions failed: %w", err)
 		}
-		if err := RunMigrations(ctx, migrationFiles, newURI); err != nil {
+
+		templateName := utils.GetListHash(migrationFiles)
+		// try to create database using template
+		err = p.createDatabaseWithTemplate(ctx, conn, dbName, templateName)
+		if errors.Is(err, errDatabaseNotExists) {
+			// create database if not exist
+			if _, err := conn.Exec("create database ?", dbName); err != nil {
+				return nil, err
+			}
+		} else if err != nil {
 			return nil, err
 		}
-	}
 
-	// create template database
-	_ = p.createDatabaseWithTemplate(ctx, conn, DefaultTemplate, dbName)
-
-	if len(req.Fixtures) != 0 {
-		// run apply fixtures if exist
-		fixtureFiles, err := getFiles(req.Fixtures)
-		if err != nil {
-			return nil, fmt.Errorf("read fixtures failed: %w", err)
-		}
-		if err := ApplyFixtures(ctx, fixtureFiles, newURI); err != nil {
+		if err := RunMigrations(ctx, conn, migrationFiles, newURI); err != nil {
 			return nil, err
 		}
+
+		if len(req.Fixtures) != 0 {
+			// run apply fixtures if exist
+			fixtureFiles, err := getFiles(req.Fixtures)
+			if err != nil {
+				return nil, fmt.Errorf("read fixtures failed: %w", err)
+			}
+			if err := ApplyFixtures(ctx, conn, fixtureFiles, newURI); err != nil {
+				return nil, err
+			}
+		}
+
+		// create a template from new database
+		_ = p.createDatabaseWithTemplate(ctx, conn, templateName, dbName)
 	}
 
 	return &database.CreateDBResponse{URI: newDB.URI()}, nil
@@ -137,12 +141,12 @@ func (p *Postgres) createDatabaseWithTemplate(ctx context.Context, conn *sql.DB,
 	}
 
 	// if default is exist, use it as template and create new database
-	if _, err := conn.Exec(fmt.Sprintf("create database %s with template %s", name, template)); err != nil {
+	if _, err := conn.Exec("create database ? with template ?", name, template); err != nil {
 		// is error database not exist?
 		if strings.Contains(err.Error(), "does not exist") {
 			return errDatabaseNotExists
 		}
-		return err
+		return fmt.Errorf("create database with template failed: %w", err)
 	}
 	return nil
 }
@@ -166,8 +170,8 @@ func (p *Postgres) RemoveDB(ctx context.Context, uri string) error {
 	}()
 
 	// terminate connection
-	_, _ = conn.ExecContext(ctx, "select pg_terminate_backend(pid) from pg_stat_activity where datname = $1", dbName)
-	if _, err := conn.ExecContext(ctx, "drop database if exists $1", dbName); err != nil {
+	_, _ = conn.ExecContext(ctx, "select pg_terminate_backend(pid) from pg_stat_activity where datname = ?", dbName)
+	if _, err := conn.ExecContext(ctx, "drop database if exists ?", dbName); err != nil {
 		return fmt.Errorf("drop database failed: %v", err)
 	}
 
@@ -184,18 +188,18 @@ func (p *Postgres) Start(ctx context.Context, detach bool) error {
 
 	log.Println("Postgres is up and running")
 	// run migrations if exist
-	if err := RunMigrations(ctx, p.cfg.migrationsFiles, p.URI()); err != nil {
+	if err := RunMigrations(ctx, nil, p.cfg.migrationsFiles, p.URI()); err != nil {
 		return err
 	}
 
 	// create template database if migrations exist
 	if len(p.cfg.migrationsFiles) > 0 {
-		_ = p.createDatabaseWithTemplate(ctx, nil, DefaultTemplate, p.cfg.name)
-	}
+		// run apply fixtures if exist
+		if err := ApplyFixtures(ctx, nil, p.cfg.fixtureFiles, p.URI()); err != nil {
+			return err
+		}
 
-	// run apply fixtures if exist
-	if err := ApplyFixtures(ctx, p.cfg.fixtureFiles, p.URI()); err != nil {
-		return err
+		_ = p.createDatabaseWithTemplate(ctx, nil, DefaultTemplate, p.cfg.name)
 	}
 
 	// print connection url
@@ -248,7 +252,7 @@ func (p *Postgres) WaitForStart(ctx context.Context, timeout time.Duration) erro
 	for range ticker.C {
 		conn, err := dbConnect(ctx, p.URI())
 		if err != nil {
-			if err == context.DeadlineExceeded {
+			if errors.Is(err, context.DeadlineExceeded) {
 				return err
 			}
 		} else {
@@ -345,32 +349,35 @@ func (p *Postgres) URI() string {
 	return (&url.URL{Scheme: "postgres", User: url.UserPassword(p.cfg.user, p.cfg.pass), Host: host, Path: p.cfg.name, RawQuery: "sslmode=disable"}).String()
 }
 
-func RunMigrations(ctx context.Context, migrationsFiles []string, uri string) error {
+func RunMigrations(ctx context.Context, conn *sql.DB, migrationsFiles []string, uri string) error {
 	if migrationsFiles == nil {
 		return nil
 	}
 
 	log.Println("Applying migrations ...")
-	return applySQL(ctx, migrationsFiles, uri)
+	return applySQL(ctx, conn, migrationsFiles, uri)
 }
 
-func ApplyFixtures(ctx context.Context, fixtureFiles []string, uri string) error {
+func ApplyFixtures(ctx context.Context, conn *sql.DB, fixtureFiles []string, uri string) error {
 	if len(fixtureFiles) == 0 {
 		return nil
 	}
 
 	log.Println("Applying fixtures ...")
-	return applySQL(ctx, fixtureFiles, uri)
+	return applySQL(ctx, conn, fixtureFiles, uri)
 }
 
-func applySQL(ctx context.Context, stmts []string, uri string) error {
-	conn, err := dbConnect(ctx, uri)
-	if err != nil {
-		return fmt.Errorf("unable to connect to database: %w", err)
+func applySQL(ctx context.Context, conn *sql.DB, stmts []string, uri string) error {
+	if conn == nil {
+		var err error
+		conn, err = dbConnect(ctx, uri)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = conn.Close()
+		}()
 	}
-	defer func() {
-		_ = conn.Close()
-	}()
 
 	for _, f := range stmts {
 		b, err := os.ReadFile(f)
@@ -391,8 +398,8 @@ func dbConnect(ctx context.Context, uri string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	//if err := conn.PingContext(ctx); err != nil {
-	//	return nil, err
-	//}
+	if err := conn.PingContext(ctx); err != nil {
+		return nil, err
+	}
 	return conn, nil
 }

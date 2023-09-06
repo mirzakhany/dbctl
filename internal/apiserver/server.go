@@ -109,7 +109,7 @@ func (s *Server) CreateDB(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		JSON(w, http.StatusInternalServerError, err)
+		JSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
