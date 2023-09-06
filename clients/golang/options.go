@@ -33,8 +33,10 @@ var defaultConfig = &config{
 	hostPort:    1988,
 }
 
+// Option is a function that configures the client.
 type Option func(*config) error
 
+// WithMigrations configures the client to use the given migrations.
 func WithMigrations(migrations string) Option {
 	return func(cfg *config) error {
 		cfg.migrations = migrations
@@ -42,6 +44,7 @@ func WithMigrations(migrations string) Option {
 	}
 }
 
+// WithDefaultMigrations configures the client to use the default migrations.
 func WithDefaultMigrations() Option {
 	return func(cfg *config) error {
 		cfg.withDefaultMigrations = true
@@ -49,6 +52,7 @@ func WithDefaultMigrations() Option {
 	}
 }
 
+// WithFixtures configures the client to use the given fixtures.
 func WithFixtures(fixtures string) Option {
 	return func(cfg *config) error {
 		cfg.fixtures = fixtures
@@ -56,6 +60,7 @@ func WithFixtures(fixtures string) Option {
 	}
 }
 
+// WithDefaultFixtures configures the client to use the default fixtures.
 func WithDefaultFixtures() Option {
 	return func(cfg *config) error {
 		cfg.withDefaultFixtures = true
@@ -63,6 +68,7 @@ func WithDefaultFixtures() Option {
 	}
 }
 
+// WithInstance configures the client to use the given postgres instance.
 func WithInstance(user, pass, address, dbname string, port uint32) Option {
 	return func(cfg *config) error {
 		cfg.instanceUser = user
@@ -73,6 +79,7 @@ func WithInstance(user, pass, address, dbname string, port uint32) Option {
 	}
 }
 
+// WithHost configures the client to use the given host.
 func WithHost(address string, port uint32) Option {
 	return func(cfg *config) error {
 		cfg.hostAddress = address
@@ -81,6 +88,7 @@ func WithHost(address string, port uint32) Option {
 	}
 }
 
+// getHostURL returns the host url.
 func (c *config) getHostURL() string {
 	host := c.hostAddress
 	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
