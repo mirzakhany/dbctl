@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// GetSelfUpdateCmd return self-update command
 func GetSelfUpdateCmd(version string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "self-update",
