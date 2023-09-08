@@ -228,6 +228,7 @@ func encodeFilters(args map[string]string) (string, error) {
 	return string(d), nil
 }
 
+// RemoveContainer removes a container by id
 func RemoveContainer(ctx context.Context, id string) error {
 	apiVersion, err := getAPIVersion(ctx)
 	if err != nil {
