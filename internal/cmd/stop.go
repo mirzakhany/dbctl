@@ -15,16 +15,18 @@ import (
 // GetStopCmd represents the stop command
 func GetStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stop {rs pg}",
+		Use:   "stop {rs pg id}",
 		Short: "stop one or more detached databases",
-		RunE:  runStop,
+		Long: `using this command you can stop one or more detached databases by their type or id, 
+		for example: dbctl stop pg rs or dbctl stop 969ec9747052`,
+		RunE: runStop,
 	}
 	return cmd
 }
 
 func runStop(_ *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		return errors.New("invalid args, can be postgres(pg) and/or redis(rs)")
+		return errors.New("invalid args, can be postgres(pg) and/or redis(rs) or instance id")
 	}
 
 	ctx := utils.ContextWithOsSignal()
@@ -47,6 +49,15 @@ func runStop(_ *cobra.Command, args []string) error {
 		}
 
 		if err := remove(ctx, items); err != nil {
+			return err
+		}
+	}
+
+	// it could be the case that user sent instance id instead of type
+	// so we try to remove it
+	// TODO check if database is in detached mode and warn user
+	if len(args) == 1 {
+		if err := container.TerminateByID(ctx, args[0]); err != nil {
 			return err
 		}
 	}
