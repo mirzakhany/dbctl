@@ -39,12 +39,12 @@ func MustCreateRedisDB(t *testing.T, opts ...Option) string {
 func MustCreateDB(t *testing.T, dbType string, opts ...Option) string {
 	uri, err := CreateDB(dbType, opts...)
 	if err != nil {
-		t.Errorf("failed to create %s database: %v", dbType, err)
+		t.Fatalf("failed to create %s database: %v", dbType, err)
 	}
 
 	t.Cleanup(func() {
 		if err := RemoveDB(dbType, uri); err != nil {
-			t.Errorf("failed to remove %s database: %v", dbType, err)
+			t.Fatalf("failed to remove %s database: %v", dbType, err)
 		}
 	})
 
@@ -105,10 +105,12 @@ func CreateDB(dbType string, opts ...Option) (string, error) {
 	return res.URI, nil
 }
 
+// ErrorMessage is representing rest api error object
 type ErrorMessage struct {
 	Error string `json:"error"`
 }
 
+// CreateDBRequest is the request object for creating a database
 type CreateDBRequest struct {
 	Type       string `json:"type"`
 	Migrations string `json:"migrations"`
@@ -121,6 +123,7 @@ type CreateDBRequest struct {
 	InstanceName string `json:"instance_name"`
 }
 
+// CreateDBResponse is the response object for creating a database
 type CreateDBResponse struct {
 	URI string `json:"uri"`
 }
@@ -134,6 +137,7 @@ func sendCreateRequest(r *CreateDBRequest, baseURL string) (*CreateDBResponse, e
 	return res, nil
 }
 
+// RemoveDBRequest is the request object for removing a database
 type RemoveDBRequest struct {
 	Type string `json:"type"`
 	URI  string `json:"uri"`
@@ -144,6 +148,7 @@ func sendRemoveRequest(r *RemoveDBRequest, baseURL string) error {
 	return err
 }
 
+// Response is eatheir CreateDBResponse or ErrorMessage
 type Response interface {
 	CreateDBResponse | interface{}
 }

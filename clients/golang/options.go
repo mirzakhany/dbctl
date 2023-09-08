@@ -6,10 +6,12 @@ import (
 	"os"
 )
 
+// config is the client configuration.
 type config struct {
 	migrations string
 	fixtures   string
 
+	// whether or not to use default migrations/fixtures loaded when dbctl started
 	withDefaultMigrations bool
 	withDefaultFixtures   bool
 
@@ -19,6 +21,7 @@ type config struct {
 	instancePass   string
 	instanceDBName string
 
+	// host and port of the host, where the dbctl testing server is running
 	hostAddress string
 	hostPort    uint32
 }

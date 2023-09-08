@@ -9,10 +9,12 @@ import (
 )
 
 func TestMustCreateDB(t *testing.T) {
-	uri := MustCreatePostgresDB(t, WithDefaultMigrations())
+	uri := MustCreatePostgresDB(t, WithMigrations("./test_data"))
 	if uri == "" {
 		t.Fatal("url is empty")
 	}
+
+	t.Log("uri:", uri)
 
 	conn, err := sql.Open("postgres", uri)
 	if err != nil {
@@ -27,7 +29,7 @@ func TestMustCreateDB(t *testing.T) {
 	}()
 
 	// do something with conn
-	res, err := conn.Exec("SELECT 1")
+	res, err := conn.Exec("insert into foo (name) values ('bar')")
 	if err != nil {
 		t.Fatal(err)
 	}

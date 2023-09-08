@@ -31,19 +31,25 @@ var (
 )
 
 const (
+	// DefaultPort is the default port for postgres
 	DefaultPort = 15432
+	// DefaultUser is the default user for postgres
 	DefaultUser = "postgres"
+	// DefaultPass is the default password for postgres
 	DefaultPass = "postgres"
+	// DefaultName is the default database name for postgres
 	DefaultName = "postgres"
-
+	// DefaultTemplate is the default template name for postgres when creating a new database with migtations and fixtures
 	DefaultTemplate = "dbctl_template"
 )
 
+// Postgres is a postgres database instance
 type Postgres struct {
 	containerID string
 	cfg         config
 }
 
+// New creates a new postgres database instance controller
 func New(options ...Option) (*Postgres, error) {
 	// create postgres with default values
 	pg := &Postgres{cfg: config{
@@ -63,6 +69,7 @@ func New(options ...Option) (*Postgres, error) {
 	return pg, nil
 }
 
+// CreateDB creates a new database with given migrations and fixtures
 func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) (*database.CreateDBResponse, error) {
 	// connect to default database
 	conn, err := dbConnect(ctx, p.URI())
@@ -78,12 +85,18 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 	newDB, _ := New(WithHost(p.cfg.user, p.cfg.pass, dbName, p.cfg.port))
 	newURI := newDB.URI()
 
-	if req.WithDefaultConfig {
-		if err = p.createDatabaseWithTemplate(ctx, conn, dbName, DefaultTemplate); err != nil {
-			if errors.Is(err, errDatabaseNotExists) {
-				return nil, fmt.Errorf("default database not found, please create it first: %w", err)
-			}
-		}
+	// if req.WithDefaultConfig {
+	// 	if err = p.createDatabaseWithTemplate(ctx, conn, dbName, DefaultTemplate); err != nil {
+	// 		if errors.Is(err, errDatabaseNotExists) {
+	// 			return nil, fmt.Errorf("default database not found, please create it first: %w", err)
+	// 		}
+	// 	}
+	// }
+
+	// create database from temaplate
+	err = p.createDatabaseWithTemplate(ctx, conn, dbName, templateName)
+	if err != nil && !errors.Is(err, errDatabaseNotExists) {
+		return nil, err
 	}
 
 	// new a new database with provided migrations and fixtures
@@ -97,17 +110,19 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 		templateName := utils.GetListHash(migrationFiles)
 		// try to create database using template
 		err = p.createDatabaseWithTemplate(ctx, conn, dbName, templateName)
-		if errors.Is(err, errDatabaseNotExists) {
-			// create database if not exist
-			if _, err := conn.Exec("create database ?", dbName); err != nil {
-				return nil, err
-			}
-		} else if err != nil {
+		if err != nil && !errors.Is(err, errDatabaseNotExists) {
 			return nil, err
 		}
 
-		if err := RunMigrations(ctx, conn, migrationFiles, newURI); err != nil {
-			return nil, err
+		if errors.Is(err, errDatabaseNotExists) {
+			// create database if not exist
+			if _, err := conn.Exec(fmt.Sprintf("create database %s", dbName)); err != nil {
+				return nil, err
+			}
+
+			if err := RunMigrations(ctx, conn, migrationFiles, newURI); err != nil {
+				return nil, err
+			}
 		}
 
 		if len(req.Fixtures) != 0 {
@@ -141,7 +156,7 @@ func (p *Postgres) createDatabaseWithTemplate(ctx context.Context, conn *sql.DB,
 	}
 
 	// if default is exist, use it as template and create new database
-	if _, err := conn.Exec("create database ? with template ?", name, template); err != nil {
+	if _, err := conn.Exec(fmt.Sprintf("create database %q with template %q", name, template)); err != nil {
 		// is error database not exist?
 		if strings.Contains(err.Error(), "does not exist") {
 			return errDatabaseNotExists
@@ -151,6 +166,7 @@ func (p *Postgres) createDatabaseWithTemplate(ctx context.Context, conn *sql.DB,
 	return nil
 }
 
+// RemoveDB removes a database from postgres by given uri
 func (p *Postgres) RemoveDB(ctx context.Context, uri string) error {
 	// parse the uri to get database name
 	u, err := url.Parse(uri)
@@ -170,14 +186,15 @@ func (p *Postgres) RemoveDB(ctx context.Context, uri string) error {
 	}()
 
 	// terminate connection
-	_, _ = conn.ExecContext(ctx, "select pg_terminate_backend(pid) from pg_stat_activity where datname = ?", dbName)
-	if _, err := conn.ExecContext(ctx, "drop database if exists ?", dbName); err != nil {
+	_, _ = conn.ExecContext(ctx, fmt.Sprintf("select pg_terminate_backend(pid) from pg_stat_activity where datname = %s", dbName))
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf("drop database if exists %s", dbName)); err != nil {
 		return fmt.Errorf("drop database failed: %v", err)
 	}
 
 	return nil
 }
 
+// Start starts a postgres database
 func (p *Postgres) Start(ctx context.Context, detach bool) error {
 	log.Printf("Starting postgres version %s on port %d ...\n", p.cfg.version, p.cfg.port)
 
@@ -237,10 +254,12 @@ func (p *Postgres) Start(ctx context.Context, detach bool) error {
 	return closeFunc(shutdownCtx)
 }
 
+// Stop stops a postgres database
 func (p *Postgres) Stop(ctx context.Context) error {
 	return container.TerminateByID(ctx, p.containerID)
 }
 
+// WaitForStart waits for postgres to start
 func (p *Postgres) WaitForStart(ctx context.Context, timeout time.Duration) error {
 	log.Println("Wait for database to boot up")
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -295,6 +314,7 @@ func (p *Postgres) runUI(ctx context.Context) (database.CloseFunc, error) {
 	return closeFunc, nil
 }
 
+// Instances returns a list of postgres instances
 func Instances(ctx context.Context) ([]database.Info, error) {
 	l, err := container.List(ctx, map[string]string{database.LabelType: database.LabelPostgres})
 	if err != nil {
@@ -344,11 +364,13 @@ func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) 
 	return closeFunc, p.WaitForStart(ctx, timeout)
 }
 
+// URI returns the postgres connection uri
 func (p *Postgres) URI() string {
 	host := net.JoinHostPort("localhost", strconv.Itoa(int(p.cfg.port)))
 	return (&url.URL{Scheme: "postgres", User: url.UserPassword(p.cfg.user, p.cfg.pass), Host: host, Path: p.cfg.name, RawQuery: "sslmode=disable"}).String()
 }
 
+// RunMigrations runs migrations on a postgres database
 func RunMigrations(ctx context.Context, conn *sql.DB, migrationsFiles []string, uri string) error {
 	if migrationsFiles == nil {
 		return nil
@@ -358,6 +380,7 @@ func RunMigrations(ctx context.Context, conn *sql.DB, migrationsFiles []string, 
 	return applySQL(ctx, conn, migrationsFiles, uri)
 }
 
+// ApplyFixtures applies fixtures on a postgres database
 func ApplyFixtures(ctx context.Context, conn *sql.DB, fixtureFiles []string, uri string) error {
 	if len(fixtureFiles) == 0 {
 		return nil

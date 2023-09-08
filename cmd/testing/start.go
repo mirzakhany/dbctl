@@ -1,14 +1,12 @@
 package testing
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
 //
-// dbctl testing \
-//			pg -p 5435 -m ./migrations -f ./fixtures \
+// dbctl testing -- \
+//			pg -p 5435 -m ./migrations -f ./fixtures - \
 //   		rs -p 7654
 //
 
@@ -33,7 +31,6 @@ func GetStartTestingCmd(rootCmd *cobra.Command) *cobra.Command {
 			cmdList = append(cmdList, cmdParts)
 
 			for _, cmdParts := range cmdList {
-				fmt.Println(cmdParts)
 				m := []string{"start", "-d"}
 				m = append(m, cmdParts...)
 				rootCmd.SetArgs(m)
