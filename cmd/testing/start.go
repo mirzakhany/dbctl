@@ -40,7 +40,7 @@ func GetStartTestingCmd(rootCmd *cobra.Command) *cobra.Command {
 	}
 
 	cmd.Flags().SetInterspersed(false)
-	cmd.AddCommand(GetTestingApiServerCmd())
+	cmd.AddCommand(GetTestingAPIServerCmd())
 
 	return cmd
 }

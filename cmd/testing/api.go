@@ -8,20 +8,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// GetTestingApiServerCmd represents the testing api server command
-func GetTestingApiServerCmd() *cobra.Command {
+// GetTestingAPIServerCmd represents the testing api server command
+func GetTestingAPIServerCmd() *cobra.Command {
 	c := &cobra.Command{
 		Aliases: []string{"api-server"},
 		Use:     "api-server",
 		Short:   "api server is a http testing server to manage databases",
-		RunE:    runTestingApiServer,
+		RunE:    runTestingAPIServer,
 	}
 
 	c.Flags().StringP("port", "p", apiserver.DefaultPort, "testing server default port")
 	return c
 }
 
-func runTestingApiServer(cmd *cobra.Command, args []string) error {
+func runTestingAPIServer(cmd *cobra.Command, args []string) error {
 	port, err := cmd.Flags().GetString("port")
 	if err != nil {
 		return fmt.Errorf("invalid port args, %w", err)

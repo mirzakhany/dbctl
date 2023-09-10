@@ -13,7 +13,6 @@ type config struct {
 
 	// whether or not to use default migrations/fixtures loaded when dbctl started
 	withDefaultMigrations bool
-	withDefaultFixtures   bool
 
 	// postgres instance information
 	instancePort   uint32
@@ -59,14 +58,6 @@ func WithDefaultMigrations() Option {
 func WithFixtures(fixtures string) Option {
 	return func(cfg *config) error {
 		cfg.fixtures = fixtures
-		return nil
-	}
-}
-
-// WithDefaultFixtures configures the client to use the default fixtures.
-func WithDefaultFixtures() Option {
-	return func(cfg *config) error {
-		cfg.withDefaultFixtures = true
 		return nil
 	}
 }

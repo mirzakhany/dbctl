@@ -37,4 +37,13 @@ func TestMustCreateDB(t *testing.T) {
 	if re, _ := res.RowsAffected(); re != 1 {
 		t.Fatal("expected 1 rows affected")
 	}
+
+	var name string
+	if err := conn.QueryRow("select name from foo").Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+
+	if name != "bar" {
+		t.Fatalf("expected name to be bar, got %s", name)
+	}
 }

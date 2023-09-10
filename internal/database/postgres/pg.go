@@ -85,62 +85,70 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 	newDB, _ := New(WithHost(p.cfg.user, p.cfg.pass, dbName, p.cfg.port))
 	newURI := newDB.URI()
 
-	// if req.WithDefaultConfig {
-	// 	if err = p.createDatabaseWithTemplate(ctx, conn, dbName, DefaultTemplate); err != nil {
-	// 		if errors.Is(err, errDatabaseNotExists) {
-	// 			return nil, fmt.Errorf("default database not found, please create it first: %w", err)
-	// 		}
-	// 	}
-	// }
+	if req.WithDefaultMigraions {
+		if err = p.createDatabaseWithTemplate(ctx, conn, dbName, DefaultTemplate); err != nil {
+			if errors.Is(err, errDatabaseNotExists) {
+				return nil, fmt.Errorf("default database not found, please create it first: %w", err)
+			}
+		}
 
-	// create database from temaplate
+		// run apply fixtures if exist
+		if len(req.Fixtures) != 0 {
+			if err := applyFixturesFromDir(ctx, conn, req.Fixtures, newURI); err != nil {
+				return nil, err
+			}
+		}
+
+		//retun new database uri
+		return &database.CreateDBResponse{URI: newURI}, nil
+	}
+
+	fmt.Println("req", req)
+
+	// if no migrations provided, just create a new database
+	if len(req.Migrations) == 0 {
+		if err := createDatabase(ctx, conn, dbName); err != nil {
+			return nil, err
+		}
+		return &database.CreateDBResponse{URI: newURI}, nil
+	}
+
+	// if migrations provided, create a template database and create a new database from template
+	// new a new database with provided migrations and fixtures
+	// run migrations if exist
+	migrationFiles, err := getFiles(req.Migrations)
+	if err != nil {
+		return nil, fmt.Errorf("read migraions failed: %w", err)
+	}
+	templateName := utils.GetListHash(migrationFiles)
+
+	// try to create database using template
 	err = p.createDatabaseWithTemplate(ctx, conn, dbName, templateName)
 	if err != nil && !errors.Is(err, errDatabaseNotExists) {
 		return nil, err
 	}
 
-	// new a new database with provided migrations and fixtures
-	if len(req.Migrations) != 0 {
-		// run migrations if exist
-		migrationFiles, err := getFiles(req.Migrations)
-		if err != nil {
-			return nil, fmt.Errorf("read migraions failed: %w", err)
-		}
-
-		templateName := utils.GetListHash(migrationFiles)
-		// try to create database using template
-		err = p.createDatabaseWithTemplate(ctx, conn, dbName, templateName)
-		if err != nil && !errors.Is(err, errDatabaseNotExists) {
+	if errors.Is(err, errDatabaseNotExists) {
+		// create database if not exist
+		if err := createDatabase(ctx, conn, dbName); err != nil {
 			return nil, err
 		}
-
-		if errors.Is(err, errDatabaseNotExists) {
-			// create database if not exist
-			if _, err := conn.Exec(fmt.Sprintf("create database %s", dbName)); err != nil {
-				return nil, err
-			}
-
-			if err := RunMigrations(ctx, conn, migrationFiles, newURI); err != nil {
-				return nil, err
-			}
-		}
-
-		if len(req.Fixtures) != 0 {
-			// run apply fixtures if exist
-			fixtureFiles, err := getFiles(req.Fixtures)
-			if err != nil {
-				return nil, fmt.Errorf("read fixtures failed: %w", err)
-			}
-			if err := ApplyFixtures(ctx, conn, fixtureFiles, newURI); err != nil {
-				return nil, err
-			}
-		}
-
-		// create a template from new database
-		_ = p.createDatabaseWithTemplate(ctx, conn, templateName, dbName)
 	}
 
-	return &database.CreateDBResponse{URI: newDB.URI()}, nil
+	// connect to new database and run migrations
+	if err := RunMigrations(ctx, nil, migrationFiles, newURI); err != nil {
+		return nil, err
+	}
+
+	// create a template from new database
+	_ = p.createDatabaseWithTemplate(ctx, conn, templateName, dbName)
+	if len(req.Fixtures) != 0 {
+		if err := applyFixturesFromDir(ctx, conn, req.Fixtures, newURI); err != nil {
+			return nil, err
+		}
+	}
+
+	return &database.CreateDBResponse{URI: newURI}, nil
 }
 
 func (p *Postgres) createDatabaseWithTemplate(ctx context.Context, conn *sql.DB, name, template string) error {
@@ -211,12 +219,12 @@ func (p *Postgres) Start(ctx context.Context, detach bool) error {
 
 	// create template database if migrations exist
 	if len(p.cfg.migrationsFiles) > 0 {
+		_ = p.createDatabaseWithTemplate(ctx, nil, DefaultTemplate, p.cfg.name)
+
 		// run apply fixtures if exist
 		if err := ApplyFixtures(ctx, nil, p.cfg.fixtureFiles, p.URI()); err != nil {
 			return err
 		}
-
-		_ = p.createDatabaseWithTemplate(ctx, nil, DefaultTemplate, p.cfg.name)
 	}
 
 	// print connection url
@@ -388,6 +396,27 @@ func ApplyFixtures(ctx context.Context, conn *sql.DB, fixtureFiles []string, uri
 
 	log.Println("Applying fixtures ...")
 	return applySQL(ctx, conn, fixtureFiles, uri)
+}
+
+func applyFixturesFromDir(ctx context.Context, conn *sql.DB, dir string, uri string) error {
+	if dir == "" {
+		return nil
+	}
+
+	files, err := getFiles(dir)
+	if err != nil {
+		return fmt.Errorf("read fixtures failed: %w", err)
+	}
+
+	log.Println("Applying fixtures ...")
+	return applySQL(ctx, conn, files, uri)
+}
+
+func createDatabase(ctx context.Context, conn *sql.DB, name string) error {
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf("create database %s", name)); err != nil {
+		return fmt.Errorf("create database failed: %w", err)
+	}
+	return nil
 }
 
 func applySQL(ctx context.Context, conn *sql.DB, stmts []string, uri string) error {
