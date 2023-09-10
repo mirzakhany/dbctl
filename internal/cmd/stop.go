@@ -56,7 +56,8 @@ func runStop(_ *cobra.Command, args []string) error {
 	// it could be the case that user sent instance id instead of type
 	// so we try to remove it
 	// TODO check if database is in detached mode and warn user
-	if len(args) == 1 {
+	// TODO hot fixing a bug, need to be refactored
+	if len(args) == 1 && args[0] != "pg" && args[0] != "rs" && args[0] != "postgres" && args[0] != "redis" {
 		if err := container.TerminateByID(ctx, args[0]); err != nil {
 			return err
 		}
