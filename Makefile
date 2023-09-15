@@ -45,6 +45,10 @@ vendor: ## Reset the main module's vendor directory to include all packages.
 build: ## Build service binary.
 	$(GOCMD) build -mod vendor $(LDFLAGS) -o dbctl $(GO_MAIN_SRC)
 
+.PHONY: build_docker
+build_docker: ## Build docker image.
+	docker build -t dbctl:$(VERSION) -t dbctl:latest .	
+
 .PHONY: install
 install: ## build and install the dbctl
 	$(GOCMD) install -mod vendor $(LDFLAGS) $(GO_MAIN_SRC)
