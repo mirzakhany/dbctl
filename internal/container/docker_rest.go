@@ -344,7 +344,7 @@ func getDockerAddr() (*dockerAddr, error) {
 			protocol: "npipe",
 			host:     "npipe:////./pipe/docker_engine",
 		}, nil
-	} else if strings.Contains(runtime.GOOS, "unix") || strings.Contains(runtime.GOOS, "darwin") {
+	} else if strings.Contains(runtime.GOOS, "unix") || strings.Contains(runtime.GOOS, "darwin") || strings.Contains(runtime.GOOS, "linux") {
 		return &dockerAddr{
 			addr:     "/var/run/docker.sock",
 			protocol: "unix",

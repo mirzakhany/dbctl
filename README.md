@@ -13,6 +13,12 @@ go install github.com/mirzakhany/dbctl@latest
 
 ## How to use
 
+## Using docker
+
+```shell
+ docker run -lt --rm -v /var/run/docker.sock:/var/run/docker.sock  dbctl:latest /dbctl ls
+```
+
 ### Start a postgres instance
 ```shell
 dbctl start pg
@@ -21,14 +27,19 @@ this command will start a postgis instance using docker engine on port `15432`, 
 
 Flags:
 ```shell
+Flags:
   -f, --fixtures string     Path to fixture files, its can be a file or directory.files in directory will be sorted by name before applying.
-  -h, --help                help for pg
+  -h, --help                help for postgres
   -m, --migrations string   Path to migration files, will be applied if provided
   -n, --name string         Database name (default "postgres")
       --pass string         Database password (default "postgres")
   -p, --port uint32         postgres default port (default 15432)
   -u, --user string         Database username (default "postgres")
-  -v, --version string      Database version, default for native 14.3.0 and 14.3.2 for docker engine
+  -v, --version string      Database version, default 14.3.2
+
+Global Flags:
+  -d, --detach   Detached mode: Run database in the background
+      --ui       Run ui component if available for chosen database
 ```
 
 an example to run migrations and apply fixtures with be like this:
