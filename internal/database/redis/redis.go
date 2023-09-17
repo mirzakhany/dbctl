@@ -50,16 +50,19 @@ func New(options ...Option) (*Redis, error) {
 	return rs, nil
 }
 
+// CreateDB creates a new database
 func (p *Redis) CreateDB(ctx context.Context, req *database.CreateDBRequest) (*database.CreateDBResponse, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
+// RemoveDB removes a database by its uri
 func (p *Redis) RemoveDB(ctx context.Context, uri string) error {
 	//TODO implement me
 	panic("implement me")
 }
 
+// Start starts the database
 func (p *Redis) Start(ctx context.Context, detach bool) error {
 	log.Printf("Starting redis version %s on port %d ...\n", p.cfg.version, p.cfg.port)
 
@@ -89,10 +92,12 @@ func (p *Redis) Start(ctx context.Context, detach bool) error {
 	return closeFunc(shutdownCtx)
 }
 
+// Stop stops the database
 func (p *Redis) Stop(ctx context.Context) error {
 	return container.TerminateByID(ctx, p.containerID)
 }
 
+// WaitForStart waits for database to boot up
 func (p *Redis) WaitForStart(ctx context.Context, timeout time.Duration) error {
 	log.Println("Wait for database to boot up")
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -115,8 +120,9 @@ func (p *Redis) WaitForStart(ctx context.Context, timeout time.Duration) error {
 	return nil
 }
 
+// Instances returns a list of running redis instances
 func Instances(ctx context.Context) ([]database.Info, error) {
-	l, err := container.List(ctx, map[string]string{database.LabelType: database.LabelRedis})
+	l, err := container.List(ctx, map[string]string{container.LabelType: database.LabelRedis})
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +154,7 @@ func (p *Redis) startUsingDocker(ctx context.Context, timeout time.Duration) (fu
 		},
 		ExposedPorts: []string{fmt.Sprintf("%s:6379/tcp", port)},
 		Name:         fmt.Sprintf("dbctl_rs_%d_%d", time.Now().Unix(), rnd.Uint64()),
-		Labels:       map[string]string{database.LabelType: database.LabelRedis},
+		Labels:       map[string]string{container.LabelType: database.LabelRedis},
 	})
 	if err != nil {
 		return nil, err
@@ -173,6 +179,7 @@ func (p *Redis) noAuthURI() string {
 	}).String()
 }
 
+// URI returns the connection string for the database
 func (p *Redis) URI() string {
 	host := net.JoinHostPort("localhost", strconv.Itoa(int(p.cfg.port)))
 

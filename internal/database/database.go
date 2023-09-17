@@ -15,7 +15,6 @@ const (
 )
 
 const (
-	LabelType     = "dbctl_type"
 	LabelPostgres = "postgres"
 	LabelPGWeb    = "pgweb"
 	LabelRedis    = "redis"

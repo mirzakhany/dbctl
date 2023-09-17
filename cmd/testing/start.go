@@ -30,12 +30,17 @@ func GetStartTestingCmd(rootCmd *cobra.Command) *cobra.Command {
 			}
 			cmdList = append(cmdList, cmdParts)
 
+			// run db commands
 			for _, cmdParts := range cmdList {
 				m := []string{"start", "-d"}
 				m = append(m, cmdParts...)
 				rootCmd.SetArgs(m)
 				rootCmd.Execute()
 			}
+
+			// run api server
+			rootCmd.SetArgs([]string{"api-server", "-t"})
+			rootCmd.Execute()
 		},
 	}
 

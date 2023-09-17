@@ -2,6 +2,8 @@ package container
 
 import "github.com/docker/go-connections/nat"
 
+const LabelType = "dbctl_type"
+
 type Container struct {
 	ID     string
 	Name   string

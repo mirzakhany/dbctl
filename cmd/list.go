@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/mirzakhany/dbctl/internal/container"
-	"github.com/mirzakhany/dbctl/internal/database"
 	"github.com/mirzakhany/dbctl/internal/table"
 	"github.com/mirzakhany/dbctl/internal/utils"
 	"github.com/spf13/cobra"
@@ -31,7 +30,7 @@ func runList(_ *cobra.Command, _ []string) error {
 	t := table.New(os.Stdout)
 	t.AddRow("ID", "Name", "Type")
 	for _, c := range containers {
-		t.AddRow(c.ID[:12], c.Name, c.Labels[database.LabelType])
+		t.AddRow(c.ID[:12], c.Name, c.Labels[container.LabelType])
 	}
 
 	t.Print()

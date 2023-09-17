@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/mirzakhany/dbctl/internal/apiserver"
 	"github.com/mirzakhany/dbctl/internal/utils"
@@ -18,6 +19,7 @@ func GetTestingAPIServerCmd() *cobra.Command {
 	}
 
 	c.Flags().StringP("port", "p", apiserver.DefaultPort, "testing server default port")
+	c.Flags().BoolP("testing", "t", false, "run in testing mode with containerized server")
 	return c
 }
 
@@ -27,7 +29,15 @@ func runTestingAPIServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid port args, %w", err)
 	}
 
-	server := apiserver.NewServer(port)
+	testing, err := cmd.Flags().GetBool("testing")
+	if err != nil {
+		return fmt.Errorf("invalid testing args, %w", err)
+	}
 
+	if testing {
+		return apiserver.RunAPIServerContainer(utils.ContextWithOsSignal(), port, 20*time.Second)
+	}
+
+	server := apiserver.NewServer(port)
 	return server.Start(utils.ContextWithOsSignal())
 }

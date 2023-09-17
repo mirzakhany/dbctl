@@ -313,7 +313,7 @@ func (p *Postgres) runUI(ctx context.Context) (database.CloseFunc, error) {
 		},
 		ExposedPorts: []string{"8081:8081"},
 		Name:         fmt.Sprintf("dbctl_pgweb_%d_%d", time.Now().Unix(), rnd.Uint64()),
-		Labels:       map[string]string{database.LabelType: database.LabelPGWeb},
+		Labels:       map[string]string{container.LabelType: database.LabelPGWeb},
 	})
 	if err != nil {
 		return nil, err
@@ -331,7 +331,7 @@ func (p *Postgres) runUI(ctx context.Context) (database.CloseFunc, error) {
 
 // Instances returns a list of postgres instances
 func Instances(ctx context.Context) ([]database.Info, error) {
-	l, err := container.List(ctx, map[string]string{database.LabelType: database.LabelPostgres})
+	l, err := container.List(ctx, map[string]string{container.LabelType: database.LabelPostgres})
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,7 @@ func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) 
 		Cmd:          []string{"postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"},
 		ExposedPorts: []string{fmt.Sprintf("%s:5432/tcp", port)},
 		Name:         fmt.Sprintf("dbctl_pg_%d_%d", time.Now().Unix(), rnd.Uint64()),
-		Labels:       map[string]string{database.LabelType: database.LabelPostgres},
+		Labels:       map[string]string{container.LabelType: database.LabelPostgres},
 	})
 	if err != nil {
 		return nil, err
