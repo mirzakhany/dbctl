@@ -23,6 +23,7 @@ func main() {
 	root.AddCommand(cmd.GetStopCmd())
 	root.AddCommand(cmd.GetListCmd())
 	root.AddCommand(cmd.GetSelfUpdateCmd(version))
+	root.AddCommand(cmd.GetTestingAPIServerCmd())
 
 	// testing is able to run multiple commands includes starting the dbctl api server
 	root.AddCommand(testing.GetStartTestingCmd(root))

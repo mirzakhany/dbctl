@@ -107,12 +107,14 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 
 	// if no migrations provided, just create a new database
 	if len(req.Migrations) == 0 {
+		log.Println("No migrations provided, creating a new database ...")
 		if err := createDatabase(ctx, conn, dbName); err != nil {
 			return nil, err
 		}
 		return &database.CreateDBResponse{URI: newURI}, nil
 	}
 
+	log.Println("Creating a new database with migrations ...")
 	// if migrations provided, create a template database and create a new database from template
 	// new a new database with provided migrations and fixtures
 	// run migrations if exist
@@ -121,29 +123,34 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 		return nil, fmt.Errorf("read migraions failed: %w", err)
 	}
 	templateName := utils.GetListHash(migrationFiles)
+	log.Println("template name is:", templateName)
 
 	// try to create database using template
 	err = p.createDatabaseWithTemplate(ctx, conn, dbName, templateName)
 	if err != nil && !errors.Is(err, errDatabaseNotExists) {
+		log.Println("create database with template failed, trying to create a new database ...")
 		return nil, err
 	}
 
 	if errors.Is(err, errDatabaseNotExists) {
+		log.Println("template database not found, creating a new database ...")
 		// create database if not exist
 		if err := createDatabase(ctx, conn, dbName); err != nil {
 			return nil, err
 		}
+
+		log.Println("template database found, creating a new database from template ...")
+		// connect to new database and run migrations
+		if err := RunMigrations(ctx, nil, migrationFiles, newURI); err != nil {
+			return nil, err
+		}
+
+		// create a template from new database
+		_ = p.createDatabaseWithTemplate(ctx, conn, templateName, dbName)
 	}
 
-	// connect to new database and run migrations
-	if err := RunMigrations(ctx, nil, migrationFiles, newURI); err != nil {
-		return nil, err
-	}
-
-	// create a template from new database
-	_ = p.createDatabaseWithTemplate(ctx, conn, templateName, dbName)
 	if len(req.Fixtures) != 0 {
-		if err := applyFixturesFromDir(ctx, conn, req.Fixtures, newURI); err != nil {
+		if err := applyFixturesFromDir(ctx, nil, req.Fixtures, newURI); err != nil {
 			return nil, err
 		}
 	}

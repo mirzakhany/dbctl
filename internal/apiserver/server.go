@@ -13,16 +13,20 @@ import (
 	rs "github.com/mirzakhany/dbctl/internal/database/redis"
 )
 
+// DefaultPort is the default port for the testing server
 const DefaultPort = "1988"
 
+// Server is the testing server
 type Server struct {
 	port string
 }
 
+// NewServer creates a new testing server
 func NewServer(port string) *Server {
 	return &Server{port: port}
 }
 
+// Start starts the testing server
 func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 
@@ -59,6 +63,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
+// CreateDBRequest is the request body for creating a database
 type CreateDBRequest struct {
 	Type       string `json:"type"`
 	Migrations string `json:"migrations"`
@@ -71,10 +76,12 @@ type CreateDBRequest struct {
 	InstanceName string `json:"instance_name"`
 }
 
+// CreateDBResponse is the response body for creating a database
 type CreateDBResponse struct {
 	URI string `json:"uri"`
 }
 
+// CreateDB creates a new database
 func (s *Server) CreateDB(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -116,11 +123,13 @@ func (s *Server) CreateDB(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, CreateDBResponse{URI: uri})
 }
 
+// RemoveDBRequest is the request body for removing a database
 type RemoveDBRequest struct {
 	Type string `json:"type"`
 	URI  string `json:"uri"`
 }
 
+// RemoveDB removes the given database
 func (s *Server) RemoveDB(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -225,15 +234,18 @@ func removeRedisDB(ctx context.Context, r *RemoveDBRequest) error {
 	return rsDB.RemoveDB(ctx, r.URI)
 }
 
+// JSONError writes the given status code and error message to the ResponseWriter.
 func JSONError(w http.ResponseWriter, status int, err string) {
 	JSON(w, status, map[string]string{"error": err})
 }
 
+// JSON writes the given status code and data to the ResponseWriter.
 func JSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("error encoding json", err)
 		return
 	}
 }
