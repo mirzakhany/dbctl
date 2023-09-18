@@ -76,7 +76,6 @@ func TestWithFixtures(t *testing.T) {
 		if err := rows.Scan(&name); err != nil {
 			t.Fatal(err)
 		}
-
 		names = append(names, name)
 	}
 

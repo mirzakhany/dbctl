@@ -3,7 +3,6 @@ package golang
 import (
 	"fmt"
 	"net"
-	"os"
 )
 
 // config is the client configuration.
@@ -84,9 +83,5 @@ func WithHost(address string, port uint32) Option {
 
 // getHostURL returns the host url.
 func (c *config) getHostURL() string {
-	host := c.hostAddress
-	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
-		host = "host.docker.internal"
-	}
-	return "http://" + net.JoinHostPort(host, fmt.Sprintf("%d", c.hostPort))
+	return "http://" + net.JoinHostPort(c.hostAddress, fmt.Sprintf("%d", c.hostPort))
 }

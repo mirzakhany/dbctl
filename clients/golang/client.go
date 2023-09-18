@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"mime/multipart"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -53,7 +56,7 @@ func MustCreateDB(t *testing.T, dbType string, opts ...Option) string {
 
 // RemoveDB remove a database using connection string
 func RemoveDB(dbType, uri string) error {
-	return sendRemoveRequest(&RemoveDBRequest{Type: dbType, URI: uri}, defaultConfig.getHostURL())
+	return httpDoRemoveDBRequest(&RemoveDBRequest{Type: dbType, URI: uri}, defaultConfig.getHostURL())
 }
 
 // CreateDB create a database and return connection string
@@ -97,8 +100,9 @@ func CreateDB(dbType string, opts ...Option) (string, error) {
 		InstanceUser: cfg.instanceUser,
 	}
 
-	res, err := sendCreateRequest(req, cfg.getHostURL())
+	res, err := httpDoCreateDBRequest(req, cfg.getHostURL())
 	if err != nil {
+		log.Println("httpDoCreateDBRequest failed:", err)
 		return "", err
 	}
 
@@ -128,24 +132,15 @@ type CreateDBResponse struct {
 	URI string `json:"uri"`
 }
 
-func sendCreateRequest(r *CreateDBRequest, baseURL string) (*CreateDBResponse, error) {
-	res, err := httpDo[CreateDBRequest, CreateDBResponse](http.MethodPost, r, baseURL+"/create")
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
 // RemoveDBRequest is the request object for removing a database
 type RemoveDBRequest struct {
 	Type string `json:"type"`
 	URI  string `json:"uri"`
 }
 
-func sendRemoveRequest(r *RemoveDBRequest, baseURL string) error {
-	_, err := httpDo[RemoveDBRequest, interface{}](http.MethodDelete, r, baseURL+"/remove")
-	return err
+// Request is eatheir CreateDBRequest or RemoveDBRequest
+type Request interface {
+	CreateDBRequest | RemoveDBRequest
 }
 
 // Response is eatheir CreateDBResponse or ErrorMessage
@@ -153,42 +148,109 @@ type Response interface {
 	CreateDBResponse | interface{}
 }
 
-func httpDo[Req any, Res Response](method string, r *Req, url string) (*Res, error) {
-	data, err := json.Marshal(r)
+func httpDoCreateDBRequest(r *CreateDBRequest, baseURL string) (*CreateDBResponse, error) {
+	url := baseURL + "/create"
+
+	bodyBuf := &bytes.Buffer{}
+	bodyWriter := multipart.NewWriter(bodyBuf)
+
+	migrationFiles, err := getFilesList(r.Migrations)
+	if err != nil {
+		log.Println("getFilesList migraions failed:", err)
+		return nil, err
+	}
+
+	fixtureFiles, err := getFilesList(r.Fixtures)
+	if err != nil {
+		log.Println("getFilesList fixtures failed:", err)
+		return nil, err
+	}
+
+	kv := map[string]string{
+		"type":          r.Type,
+		"instance_port": fmt.Sprintf("%d", r.InstancePort),
+		"instance_user": r.InstanceUser,
+		"instance_pass": r.InstancePass,
+		"instance_name": r.InstanceName,
+	}
+
+	for _, f := range migrationFiles {
+		if err := addFileToWriter(bodyWriter, "migrations", f); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, f := range fixtureFiles {
+		if err := addFileToWriter(bodyWriter, "fixtures", f); err != nil {
+			return nil, err
+		}
+	}
+
+	for k, v := range kv {
+		if err := bodyWriter.WriteField(k, v); err != nil {
+			return nil, err
+		}
+	}
+
+	contentType := bodyWriter.FormDataContentType()
+	if err := bodyWriter.Close(); err != nil {
+		return nil, err
+	}
+
+	req, err := http.Post(url, contentType, bodyBuf)
 	if err != nil {
 		return nil, err
 	}
+	defer req.Body.Close()
 
-	req, err := http.NewRequest(method, url, bytes.NewReader(data))
-	if err != nil {
+	if err := checkForError(req); err != nil {
 		return nil, err
 	}
 
-	rawRes, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer rawRes.Body.Close()
-
-	if err := checkForError(rawRes); err != nil {
-		return nil, err
-	}
-
-	if method == http.MethodDelete {
-		return nil, nil
-	}
-
-	rawData, err := io.ReadAll(rawRes.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var res Res
-	if err := json.Unmarshal(rawData, &res); err != nil {
+	var res CreateDBResponse
+	if err := json.NewDecoder(req.Body).Decode(&res); err != nil {
 		return nil, err
 	}
 
 	return &res, nil
+}
+
+func httpDoRemoveDBRequest(r *RemoveDBRequest, baseURL string) error {
+	data, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, baseURL+"/remove", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+
+	rawRes, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer rawRes.Body.Close()
+
+	return checkForError(rawRes)
+}
+
+func addFileToWriter(w *multipart.Writer, fieldname, filename string) error {
+	fileWriter, err := w.CreateFormFile(fieldname, filename)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(fileWriter, f); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func checkForError(r *http.Response) error {
@@ -200,4 +262,28 @@ func checkForError(r *http.Response) error {
 		return errors.New(err.Error)
 	}
 	return nil
+}
+
+// getFilesList returns a list of files in a directory
+func getFilesList(dir string) ([]string, error) {
+	if dir == "" {
+		return nil, nil
+	}
+
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	absPath, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []string
+	for _, f := range files {
+		out = append(out, filepath.Join(absPath, f.Name()))
+	}
+
+	return out, nil
 }

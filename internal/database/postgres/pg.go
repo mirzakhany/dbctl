@@ -53,9 +53,9 @@ type Postgres struct {
 func New(options ...Option) (*Postgres, error) {
 	// create postgres with default values
 	pg := &Postgres{cfg: config{
-		pass:    "postgres",
-		user:    "postgres",
-		name:    "postgres",
+		pass:    DefaultPass,
+		user:    DefaultUser,
+		name:    DefaultName,
 		port:    DefaultPort,
 		version: "14.3.0",
 	}}
@@ -102,8 +102,6 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 		//retun new database uri
 		return &database.CreateDBResponse{URI: newURI}, nil
 	}
-
-	fmt.Println("req", req)
 
 	// if no migrations provided, just create a new database
 	if len(req.Migrations) == 0 {
@@ -153,6 +151,11 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 		if err := applyFixturesFromDir(ctx, nil, req.Fixtures, newURI); err != nil {
 			return nil, err
 		}
+	}
+
+	// make sure we retrun localhost instead of host.docker.internal
+	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
+		newURI = strings.ReplaceAll(newURI, "host.docker.internal", "localhost")
 	}
 
 	return &database.CreateDBResponse{URI: newURI}, nil
@@ -381,7 +384,12 @@ func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) 
 
 // URI returns the postgres connection uri
 func (p *Postgres) URI() string {
-	host := net.JoinHostPort("localhost", strconv.Itoa(int(p.cfg.port)))
+	addr := "localhost"
+	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
+		addr = "host.docker.internal"
+	}
+
+	host := net.JoinHostPort(addr, strconv.Itoa(int(p.cfg.port)))
 	return (&url.URL{Scheme: "postgres", User: url.UserPassword(p.cfg.user, p.cfg.pass), Host: host, Path: p.cfg.name, RawQuery: "sslmode=disable"}).String()
 }
 

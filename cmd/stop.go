@@ -15,7 +15,7 @@ import (
 // GetStopCmd represents the stop command
 func GetStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stop {rs pg id}",
+		Use:   "stop {rs pg id all}",
 		Short: "stop one or more detached databases",
 		Long: `using this command you can stop one or more detached databases by their type or id, 
 		for example: dbctl stop pg rs or dbctl stop 969ec9747052`,
@@ -58,6 +58,22 @@ func runStop(_ *cobra.Command, args []string) error {
 	// TODO check if database is in detached mode and warn user
 	// TODO hot fixing a bug, need to be refactored
 	if len(args) == 1 && args[0] != "pg" && args[0] != "rs" && args[0] != "postgres" && args[0] != "redis" {
+		// check if its all then remove all
+		if args[0] == "all" {
+			containers, err := container.List(ctx, nil)
+			if err != nil {
+				return err
+			}
+
+			for _, c := range containers {
+				if err := container.TerminateByID(ctx, c.ID); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		// remove by id
 		if err := container.TerminateByID(ctx, args[0]); err != nil {
 			return err
 		}

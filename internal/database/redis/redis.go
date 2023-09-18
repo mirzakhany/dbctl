@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
 
@@ -181,7 +182,12 @@ func (p *Redis) noAuthURI() string {
 
 // URI returns the connection string for the database
 func (p *Redis) URI() string {
-	host := net.JoinHostPort("localhost", strconv.Itoa(int(p.cfg.port)))
+	addr := "localhost"
+	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
+		addr = "host.docker.internal"
+	}
+
+	host := net.JoinHostPort(addr, strconv.Itoa(int(p.cfg.port)))
 
 	var userInfo *url.Userinfo
 	if p.cfg.user != "" && p.cfg.pass != "" {

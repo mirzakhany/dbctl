@@ -3,9 +3,12 @@ package apiserver
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/mirzakhany/dbctl/internal/database"
@@ -70,6 +73,7 @@ type CreateDBRequest struct {
 	Fixtures   string `json:"fixtures"`
 
 	// postgres instance information
+	InstanceHost string `json:"instance_host"`
 	InstancePort uint32 `json:"instance_port"`
 	InstanceUser string `json:"instance_user"`
 	InstancePass string `json:"instance_pass"`
@@ -87,11 +91,12 @@ func (s *Server) CreateDB(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-
-	req := &CreateDBRequest{}
-	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-		JSONError(w, http.StatusBadRequest, err.Error())
-		return
+	req := &CreateDBRequest{
+		Type:         r.FormValue("type"),
+		InstancePass: r.FormValue("instance_pass"),
+		InstanceUser: r.FormValue("instance_user"),
+		InstanceName: r.FormValue("instance_name"),
+		InstanceHost: r.FormValue("instance_host"),
 	}
 
 	if req.Type == "" {
@@ -105,22 +110,65 @@ func (s *Server) CreateDB(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var uri string
-	var err error
-
-	switch req.Type {
-	case "postgres":
-		uri, err = createPostgresDB(r.Context(), req)
-	case "redis":
-		uri, err = createRedisDB(r.Context(), req)
-	}
-
+	migrationsDir, err := os.MkdirTemp("/tmp", "migrations-*")
 	if err != nil {
 		JSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	defer os.RemoveAll(migrationsDir)
+
+	fixturesDir, err := os.MkdirTemp("/tmp", "fixtures-*")
+	if err != nil {
+		JSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer os.RemoveAll(fixturesDir)
+
+	// read migrations
+	if err := readMulipartFiles(r, "migrations", migrationsDir); err != nil {
+		JSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	req.Migrations = migrationsDir
+
+	// read fixtures
+	if err := readMulipartFiles(r, "fixtures", fixturesDir); err != nil {
+		JSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	req.Fixtures = fixturesDir
+
+	var uri string
+	var createErr error
+
+	switch req.Type {
+	case "postgres":
+		uri, createErr = createPostgresDB(r.Context(), req)
+	case "redis":
+		uri, createErr = createRedisDB(r.Context(), req)
+	}
+
+	if createErr != nil {
+		JSONError(w, http.StatusInternalServerError, createErr.Error())
+		return
+	}
 
 	JSON(w, http.StatusOK, CreateDBResponse{URI: uri})
+}
+
+func readMulipartFiles(r *http.Request, key, dst string) error {
+	for _, f := range r.MultipartForm.File[key] {
+		dst, err := os.Create(filepath.Join(dst, f.Filename))
+		if err != nil {
+			return err
+		}
+		f, err := f.Open()
+		if err != nil {
+			return err
+		}
+		io.Copy(dst, f)
+	}
+	return nil
 }
 
 // RemoveDBRequest is the request body for removing a database

@@ -21,8 +21,11 @@ func RunAPIServerContainer(ctx context.Context, port string, timeout time.Durati
 	}
 
 	_, err = container.Run(ctx, container.CreateRequest{
-		Image:        "mirzakhani/dbctl:latest",
-		Cmd:          []string{"apiserver"},
+		Image: "mirzakhani/dbctl:latest",
+		Env: map[string]string{
+			"DBCTL_INSIDE_DOCKER": "true",
+		},
+		Cmd:          []string{"/dbctl", "api-server"},
 		ExposedPorts: []string{fmt.Sprintf("%s:1988/tcp", port)},
 		Name:         fmt.Sprintf("dbctl_apiserver_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: labelAPIServer},
