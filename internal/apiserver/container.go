@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"time"
@@ -43,7 +44,10 @@ func RunAPIServerContainer(ctx context.Context, port string, timeout time.Durati
 			}
 		} else {
 			_ = conn.Close()
-			return nil
+			break
 		}
 	}
+
+	log.Println("Started apiserver on http://localhost:" + port)
+	return nil
 }
