@@ -260,11 +260,9 @@ func createRedisDB(ctx context.Context, r *CreateDBRequest) (string, error) {
 		r.InstancePass = rs.DefaultPass
 	}
 
-	rsDB, _ := rs.New(rs.WithHost(r.InstanceUser, r.InstancePass, 10, r.InstancePort))
-	res, err := rsDB.CreateDB(ctx, &database.CreateDBRequest{
-		Migrations: r.Migrations,
-		Fixtures:   r.Fixtures,
-	})
+	// TODO handle redis fixtures
+	rsDB, _ := rs.New()
+	res, err := rsDB.CreateDB(ctx, &database.CreateDBRequest{})
 
 	if err != nil {
 		return "", err

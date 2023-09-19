@@ -5,10 +5,12 @@ import (
 
 	"testing"
 	// golang postgres driver
+	"github.com/gomodule/redigo/redis"
+	_ "github.com/gomodule/redigo/redis"
 	_ "github.com/lib/pq"
 )
 
-func TestMustCreateDB(t *testing.T) {
+func TestMustCreatePostgresDB(t *testing.T) {
 	uri := MustCreatePostgresDB(t, WithMigrations("./test_sql/schema"))
 	if uri == "" {
 		t.Fatal("url is empty")
@@ -48,7 +50,7 @@ func TestMustCreateDB(t *testing.T) {
 	}
 }
 
-func TestWithFixtures(t *testing.T) {
+func TestPostgresDBWithFixtures(t *testing.T) {
 	uri := MustCreatePostgresDB(t, WithMigrations("./test_sql/schema"), WithFixtures("./test_sql/fixtures"))
 	if uri == "" {
 		t.Fatal("url is empty")
@@ -88,6 +90,39 @@ func TestWithFixtures(t *testing.T) {
 		if !contains(expected, name) {
 			t.Fatalf("expected name to be one of %v, got %s", expected, name)
 		}
+	}
+}
+
+func TestRedis(t *testing.T) {
+	uri := MustCreateRedisDB(t)
+	if uri == "" {
+		t.Fatal("url is empty")
+	}
+
+	t.Log("uri:", uri)
+
+	// do something with conn
+	conn, err := redis.DialURL(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	// set key
+	if _, err := conn.Do("SET", "foo", "bar"); err != nil {
+		t.Fatal(err)
+	}
+
+	// get key
+	res, err := redis.String(conn.Do("GET", "foo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res != "bar" {
+		t.Fatalf("expected res to be bar, got %s", res)
 	}
 }
 
