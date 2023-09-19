@@ -1,6 +1,7 @@
 package pg
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -35,8 +36,10 @@ var (
 	}
 )
 
+// Option is the type of the functional options for the postgres
 type Option func(*config) error
 
+// WithUI applied withUI option to config
 func WithUI(withIU bool) Option {
 	return func(c *config) error {
 		c.withUI = withIU
@@ -44,6 +47,7 @@ func WithUI(withIU bool) Option {
 	}
 }
 
+// WithHost applied selected postgres host to config
 func WithHost(user, pass, name string, port uint32) Option {
 	return func(c *config) error {
 		c.user = user
@@ -81,6 +85,7 @@ func getVersions() []string {
 	return out
 }
 
+// WithLogger applied selected logger to config
 func WithLogger(logger io.Writer) Option {
 	return func(c *config) error {
 		c.logger = logger
@@ -88,6 +93,7 @@ func WithLogger(logger io.Writer) Option {
 	}
 }
 
+// WithMigrations applied selected migrations to config
 func WithMigrations(path string) Option {
 	return func(c *config) error {
 		files, err := getFiles(path)
@@ -107,6 +113,7 @@ func WithMigrations(path string) Option {
 	}
 }
 
+// WithFixtures applied selected fixtures to config
 func WithFixtures(path string) Option {
 	return func(c *config) error {
 		files, err := getFiles(path)
@@ -161,4 +168,13 @@ func getPostGisImage(version string) string {
 	}
 	// fallback to odidev/postgis:13-3.1
 	return "odidev/postgis:13-3.1-alpine"
+}
+
+// get hash generate a hash from list of strings
+func getHash(list []string) string {
+	sort.Strings(list)
+	xx := fmt.Sprintf("%x", list)
+	// create md5 hash of xx
+	cc := sha256.Sum256([]byte(xx))
+	return string(cc[:])
 }

@@ -18,7 +18,7 @@ func GetRedisCmd() *cobra.Command {
 		RunE:    runRedis,
 	}
 
-	cmd.Flags().Uint32P("port", "p", 16379, "Redis default port")
+	cmd.Flags().Uint32P("port", "p", redis.DefaultPort, "Redis default port")
 	cmd.Flags().Int("db", 0, "Redis db index")
 	cmd.Flags().StringP("user", "u", "", "Database username")
 	cmd.Flags().String("pass", "", "Database password")

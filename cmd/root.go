@@ -12,6 +12,7 @@ func GetRootCmd(version string) *cobra.Command {
 		Short:   "Your swish knife of testing databases",
 		Long: `Dbctl is a command line tools, providing simple 
 command to run and manage databases for tests proposes`,
+		TraverseChildren: true,
 	}
 
 	return cmd

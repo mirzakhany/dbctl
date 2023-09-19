@@ -47,7 +47,7 @@ build: ## Build service binary.
 
 .PHONY: build_docker
 build_docker: ## Build docker image.
-	docker build -t dbctl:$(VERSION) -t dbctl:latest .	
+	docker build -t mirzakhani/dbctl:$(VERSION) -t mirzakhani/dbctl:latest .	
 
 .PHONY: install
 install: ## build and install the dbctl

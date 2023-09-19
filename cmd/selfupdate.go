@@ -7,11 +7,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mirzakhany/dbctl/internal/logger"
 	"github.com/mirzakhany/dbctl/internal/selfupdate"
 	"github.com/mirzakhany/dbctl/internal/utils"
 	"github.com/spf13/cobra"
 )
 
+// GetSelfUpdateCmd return self-update command
 func GetSelfUpdateCmd(version string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "self-update",
@@ -59,7 +61,7 @@ func doSelfUpdate(version string) error {
 	log.Print("Do you want to update to ", latest, "? (y/n): ")
 	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil || (input != "y\n" && input != "n\n") {
-		log.Println("Invalid input")
+		logger.Error("Invalid input")
 		return err
 	}
 	if input == "n\n" {
@@ -67,9 +69,9 @@ func doSelfUpdate(version string) error {
 	}
 
 	if err := updater.Update(ctx); err != nil {
-		log.Println("Error occurred while updating binary:", err)
+		logger.Error("Error occurred while updating binary:", err)
 		return err
 	}
-	log.Println("Successfully updated to version", latest)
+	logger.Info("Successfully updated to version", latest)
 	return nil
 }
