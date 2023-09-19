@@ -15,6 +15,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
+	"github.com/mirzakhany/dbctl/internal/logger"
 )
 
 var (
@@ -83,7 +84,7 @@ func (p *Redis) Start(ctx context.Context, detach bool) error {
 	}
 
 	<-ctx.Done()
-	log.Println("Shutdown signal received, stopping database")
+	logger.Info("Shutdown signal received, stopping database")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
@@ -100,7 +101,7 @@ func (p *Redis) Stop(ctx context.Context) error {
 
 // WaitForStart waits for database to boot up
 func (p *Redis) WaitForStart(ctx context.Context, timeout time.Duration) error {
-	log.Println("Wait for database to boot up")
+	logger.Info("Wait for database to boot up")
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 

@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"time"
 
 	"github.com/mirzakhany/dbctl/internal/container"
+	"github.com/mirzakhany/dbctl/internal/logger"
 )
 
 const labelAPIServer = "apiserver"
@@ -48,6 +48,6 @@ func RunAPIServerContainer(ctx context.Context, port string, timeout time.Durati
 		}
 	}
 
-	log.Println("Started apiserver on http://localhost:" + port)
+	logger.Info("Started apiserver on http://localhost:" + port)
 	return nil
 }

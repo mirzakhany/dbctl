@@ -6,12 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/mirzakhany/dbctl/internal/logger"
 )
 
 var (
@@ -102,7 +103,7 @@ func CreateDB(dbType string, opts ...Option) (string, error) {
 
 	res, err := httpDoCreateDBRequest(req, cfg.getHostURL())
 	if err != nil {
-		log.Println("httpDoCreateDBRequest failed:", err)
+		logger.Error("httpDoCreateDBRequest failed:", err)
 		return "", err
 	}
 
@@ -156,13 +157,13 @@ func httpDoCreateDBRequest(r *CreateDBRequest, baseURL string) (*CreateDBRespons
 
 	migrationFiles, err := getFilesList(r.Migrations)
 	if err != nil {
-		log.Println("getFilesList migraions failed:", err)
+		logger.Error("getFilesList migraions failed:", err)
 		return nil, err
 	}
 
 	fixtureFiles, err := getFilesList(r.Fixtures)
 	if err != nil {
-		log.Println("getFilesList fixtures failed:", err)
+		logger.Error("getFilesList fixtures failed:", err)
 		return nil, err
 	}
 

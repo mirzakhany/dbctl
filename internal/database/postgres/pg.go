@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"net/url"
@@ -15,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mirzakhany/dbctl/internal/logger"
 	"github.com/mirzakhany/dbctl/internal/utils"
 
 	// golang postgres driver
@@ -105,14 +105,14 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 
 	// if no migrations provided, just create a new database
 	if len(req.Migrations) == 0 {
-		log.Println("No migrations provided, creating a new database ...")
+		logger.Debug("No migrations provided, creating a new database ...")
 		if err := createDatabase(ctx, conn, dbName); err != nil {
 			return nil, err
 		}
 		return &database.CreateDBResponse{URI: newURI}, nil
 	}
 
-	log.Println("Creating a new database with migrations ...")
+	logger.Debug("Creating a new database with migrations ...")
 	// if migrations provided, create a template database and create a new database from template
 	// new a new database with provided migrations and fixtures
 	// run migrations if exist
@@ -121,23 +121,23 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 		return nil, fmt.Errorf("read migraions failed: %w", err)
 	}
 	templateName := utils.GetListHash(migrationFiles)
-	log.Println("template name is:", templateName)
+	logger.Debug("template name is:", templateName)
 
 	// try to create database using template
 	err = p.createDatabaseWithTemplate(ctx, conn, dbName, templateName)
 	if err != nil && !errors.Is(err, errDatabaseNotExists) {
-		log.Println("create database with template failed, trying to create a new database ...")
+		logger.Debug("create database with template failed, trying to create a new database ...")
 		return nil, err
 	}
 
 	if errors.Is(err, errDatabaseNotExists) {
-		log.Println("template database not found, creating a new database ...")
+		logger.Debug("template database not found, creating a new database ...")
 		// create database if not exist
 		if err := createDatabase(ctx, conn, dbName); err != nil {
 			return nil, err
 		}
 
-		log.Println("template database found, creating a new database from template ...")
+		logger.Debug("template database found, creating a new database from template ...")
 		// connect to new database and run migrations
 		if err := RunMigrations(ctx, nil, migrationFiles, newURI); err != nil {
 			return nil, err
@@ -214,14 +214,14 @@ func (p *Postgres) RemoveDB(ctx context.Context, uri string) error {
 
 // Start starts a postgres database
 func (p *Postgres) Start(ctx context.Context, detach bool) error {
-	log.Printf("Starting postgres version %s on port %d ...\n", p.cfg.version, p.cfg.port)
+	logger.Info(fmt.Sprintf("Starting postgres version %s on port %d ...", p.cfg.version, p.cfg.port))
 
 	closeFunc, err := p.startUsingDocker(ctx, 20*time.Second)
 	if err != nil {
 		return err
 	}
 
-	log.Println("Postgres is up and running")
+	logger.Info("Postgres is up and running")
 	// run migrations if exist
 	if err := RunMigrations(ctx, nil, p.cfg.migrationsFiles, p.URI()); err != nil {
 		return err
@@ -238,7 +238,7 @@ func (p *Postgres) Start(ctx context.Context, detach bool) error {
 	}
 
 	// print connection url
-	log.Printf("Database uri is: %q\n", p.URI())
+	logger.Info(fmt.Sprintf("Database uri is: %q", p.URI()))
 
 	var pgwebCloseFunc database.CloseFunc
 	if p.cfg.withUI {
@@ -255,7 +255,7 @@ func (p *Postgres) Start(ctx context.Context, detach bool) error {
 	}
 
 	<-ctx.Done()
-	log.Println("Shutdown signal received, stopping database")
+	logger.Info("Shutdown signal received, stopping database")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
@@ -279,7 +279,7 @@ func (p *Postgres) Stop(ctx context.Context) error {
 
 // WaitForStart waits for postgres to start
 func (p *Postgres) WaitForStart(ctx context.Context, timeout time.Duration) error {
-	log.Println("Wait for database to boot up")
+	logger.Info("Wait for database to boot up")
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -301,7 +301,7 @@ func (p *Postgres) WaitForStart(ctx context.Context, timeout time.Duration) erro
 }
 
 func (p *Postgres) runUI(ctx context.Context) (database.CloseFunc, error) {
-	log.Println("Starting postgres ui using pgweb (https://github.com/sosedoff/pgweb)")
+	logger.Info("Starting postgres ui using pgweb (https://github.com/sosedoff/pgweb)")
 
 	var rnd, err = rand.Int(rand.Reader, big.NewInt(20))
 	if err != nil {
@@ -323,7 +323,7 @@ func (p *Postgres) runUI(ctx context.Context) (database.CloseFunc, error) {
 	}
 
 	// log ui url
-	log.Println("Database UI is running on: http://localhost:8081")
+	logger.Info("Database UI is running on: http://localhost:8081")
 
 	closeFunc := func(ctx context.Context) error {
 		return pgweb.Terminate(ctx)
@@ -399,7 +399,7 @@ func RunMigrations(ctx context.Context, conn *sql.DB, migrationsFiles []string, 
 		return nil
 	}
 
-	log.Println("Applying migrations ...")
+	logger.Info("Applying migrations ...")
 	return applySQL(ctx, conn, migrationsFiles, uri)
 }
 
@@ -409,7 +409,7 @@ func ApplyFixtures(ctx context.Context, conn *sql.DB, fixtureFiles []string, uri
 		return nil
 	}
 
-	log.Println("Applying fixtures ...")
+	logger.Info("Applying fixtures ...")
 	return applySQL(ctx, conn, fixtureFiles, uri)
 }
 
@@ -423,7 +423,7 @@ func applyFixturesFromDir(ctx context.Context, conn *sql.DB, dir string, uri str
 		return fmt.Errorf("read fixtures failed: %w", err)
 	}
 
-	log.Println("Applying fixtures ...")
+	logger.Info("Applying fixtures ...")
 	return applySQL(ctx, conn, files, uri)
 }
 

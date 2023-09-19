@@ -14,6 +14,7 @@ import (
 	"github.com/mirzakhany/dbctl/internal/database"
 	pg "github.com/mirzakhany/dbctl/internal/database/postgres"
 	rs "github.com/mirzakhany/dbctl/internal/database/redis"
+	"github.com/mirzakhany/dbctl/internal/logger"
 )
 
 // DefaultPort is the default port for the testing server
@@ -43,7 +44,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	errs := make(chan error, 1)
 	go func() {
-		log.Println("starting testing server on port", s.port)
+		logger.Info("starting testing server on port", s.port)
 		if err := srv.ListenAndServe(); err != nil {
 			errs <- err
 		}
@@ -51,7 +52,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		log.Println("shutting down testing server")
+		logger.Info("shutting down testing server")
 		// graceful shutdown
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -293,7 +294,7 @@ func JSON(w http.ResponseWriter, status int, data interface{}) {
 
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Println("error encoding json", err)
+		logger.Error("error encoding json", err)
 		return
 	}
 }
