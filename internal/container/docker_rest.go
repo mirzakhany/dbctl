@@ -338,20 +338,54 @@ func getDockerAddr() (*dockerAddr, error) {
 		}, nil
 	}
 
+	socketAddr, err := getDockerSocketAddr()
+	if err != nil {
+		return nil, err
+	}
+
 	if strings.Contains(runtime.GOOS, "windows") {
 		return &dockerAddr{
-			addr:     "//./pipe/docker_engine",
+			addr:     socketAddr,
 			protocol: "npipe",
-			host:     "npipe:////./pipe/docker_engine",
+			host:     "npipe:////" + socketAddr,
 		}, nil
 	} else if strings.Contains(runtime.GOOS, "unix") || strings.Contains(runtime.GOOS, "darwin") || strings.Contains(runtime.GOOS, "linux") {
 		return &dockerAddr{
-			addr:     "/var/run/docker.sock",
+			addr:     socketAddr,
 			protocol: "unix",
-			host:     "unix:///var/run/docker.sock",
+			host:     "unix://" + socketAddr,
 		}, nil
 	}
 	return nil, errors.New("failed to get docker address")
+}
+
+func getDockerSocketAddr() (string, error) {
+	if runtime.GOOS == "windows" {
+		return "./pipe/docker_engine", nil
+	}
+
+	addr := "/var/run/docker.sock"
+
+	// check if socker file is in /run/var directory otherwise check home directory
+	if _, err := os.Stat(addr); err == nil {
+		return addr, nil
+	} else if os.IsNotExist(err) {
+		// check if socker file is in home directory
+		// get home directory path from os
+		osHomeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+
+		addr = fmt.Sprintf("%s/.docker/run/docker.sock", osHomeDir)
+		if _, err := os.Stat(addr); err == nil {
+			return addr, nil
+		}
+
+		return "", fmt.Errorf("docker socket file not found in /var/run/docker.sock or %s/.docker/run/docker.sock", osHomeDir)
+	}
+
+	return "", fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 }
 
 // ParseHostURL parses a url string, validates the string is a host url, and
