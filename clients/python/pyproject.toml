@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dbctl"
+version = "0.1.0"
+authors = [
+  { name="Mohsen Mirzakhani", email="mohsen.mkh88@gmail.com" },
+]
+description = "DBCTL testing client"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/mirzakhany/dbctl"
+"Bug Tracker" = "https://github.com/mirzakhany/dbctl/issues"
