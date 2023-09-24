@@ -1,7 +1,7 @@
 from options import Config
 import os
 import requests
-from requests_toolbelt.multipart.encoder import MultipartEncoder
+import json
 
 class ErrInvalideDatabaseType(Exception):
     pass
@@ -34,17 +34,32 @@ class CreateDatabaseRequest(dict):
 class CreateDatabaseResponse:
     uri: str
 
+    def __dict__(self):
+        return {
+            "uri": self.uri
+        }
+    
+class RemoveDatabaseRequest(dict):
+    db_type: str
+    uri: str
+
+    def __dict__(self):
+        return {
+            "type": self.db_type,
+            "uri": self.uri
+        }    
+
+
 
 def must_create_database(config: Config):
     if config.database_type == DATABASE_POSTGRES:
-        create_postgres_database(config)
+        create_database(config, DATABASE_POSTGRES)
     elif config.database_type == DATABASE_REDIS:
-        create_redis_database(config)
+        create_database(config, DATABASE_REDIS)
     else:
         raise ErrInvalideDatabaseType(f"Invalid database type: {config.database_type}")
 
-def create_postgres_database(config: Config):
-
+def create_database(config: Config, db_type: str ):
     migrations_path: str
     fixtures_path: str
 
@@ -55,7 +70,7 @@ def create_postgres_database(config: Config):
         fixtures_path = os.path.abspath(config.fixtures)
 
     req = CreateDatabaseRequest(
-        db_type=DATABASE_POSTGRES,
+        db_type=db_type,
         migrations=migrations_path,
         fixtures=fixtures_path,
         instance_port=config.instance_port,
@@ -66,12 +81,8 @@ def create_postgres_database(config: Config):
 
     http_do_create_database(req, config.get_host_url())
 
-def create_redis_database(config: Config):
-    pass
 
-
-
-def http_do_create_database(req: CreateDatabaseRequest, host_url: str):
+def http_do_create_database(req: CreateDatabaseRequest, host_url: str) -> CreateDatabaseResponse:
     url = f"{host_url}/create"
 
     migration_files = get_files_list(req.migrations)
@@ -85,11 +96,29 @@ def http_do_create_database(req: CreateDatabaseRequest, host_url: str):
         "instance_name": req.instance_name,
     }
 
-    for i, f in enumerate(migration_files):
-        kv[f"migrations[{i}]"] = f
+    files = []
+    for file in migration_files:
+        files.append(("migrations", open(file, "rb")))
 
+    for file in fixtures_files:
+        files.append(("fixtures", open(file, "rb")))
 
-def get_files_list(path: str):
-    # retrun list of files in path
-    pass
+    req = requests.post(url, data=kv, files=files)    
+    if req.status_code != 200:
+        raise Exception(f"Error creating database: {req.text}")
     
+    res = CreateDatabaseResponse()
+    res.uri = req.json()["uri"]
+
+    return res
+
+def http_do_remove_database(req:RemoveDatabaseRequest, host_url: str):
+    url = f"{host_url}/remove"
+  
+    req = requests.post(url, data=req.__dict__())
+    if req.status_code != 204:
+        raise Exception(f"Error removing database: {req.text}")
+
+def get_files_list(path: str) -> list[str]:
+    # retrun list of files in path
+    return os.listdir(path)
