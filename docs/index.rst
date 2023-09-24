@@ -31,11 +31,3 @@ DBCTL is a tool designed to make running a database in a Docker container easy a
 
    testing/overview.md
    testing/golang.md
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

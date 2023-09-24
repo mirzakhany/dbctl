@@ -28,7 +28,7 @@ Note: in none root installation of docker `docker.sock` is in `$HOME/.docker/run
 You can also download a prebuilt binary from [releases](https://github.com/mirzakhany/dbctl/releases) page!
 
 
-Check the [docs](github.com/mirzakhany/dbctl/docs) for usage.
+Please Check the [docs](https://dbctl.readthedocs.io) for usage.
 
 
 ### Todo

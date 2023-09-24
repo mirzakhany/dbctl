@@ -1,3 +1,3 @@
-# Getting started with PostgreSQL 
+# Getting started with Redis 
 
 TODO
