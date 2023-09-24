@@ -1,8 +1,15 @@
-# DbCtl
+# DBCTL
 
-## Overview
-DbCtl is a cli tools to create run databases for test and education purpose. 
-it can run migration and setup fixtures.
+## Description
+DBCTL is a tool designed to make running a database in a Docker container easy and fast. It offers the following features:
+
+- Run a database with applied migration files and sample data.
+- Access the connection URL and use your preferred tools to connect to the database.
+- Launch a user interface (UI) for managing the database, if available.
+- Enable users to quickly run tests in a fresh database.
+- Cleanup databases once you're finished using them!
+
+#### DBCTL is not intended for running databases in production. Its primary purpose is to simplify testing and practice with minimal hassle.
 
 ## Install
 To install `dbctl` from it source:
@@ -11,72 +18,44 @@ To install `dbctl` from it source:
 go install github.com/mirzakhany/dbctl@latest
 ```
 
-## How to use
-
-## Using docker
-
+### Using docker
 ```shell
- docker run -lt --rm -v /var/run/docker.sock:/var/run/docker.sock  dbctl:latest /dbctl ls
+ docker run -lt --rm -v /var/run/docker.sock:/var/run/docker.sock  dbctl:latest /dbctl [options] [args]
 ```
 
-### Start a postgres instance
-```shell
-dbctl start pg
-```
-this command will start a postgis instance using docker engine on port `15432`, with  `postgres` as default username,password and db name.
+Note: in none root installation of docker `docker.sock` is in `$HOME/.docker/run/docker.sock`
 
-Flags:
-```shell
-Flags:
-  -f, --fixtures string     Path to fixture files, its can be a file or directory.files in directory will be sorted by name before applying.
-  -h, --help                help for postgres
-  -m, --migrations string   Path to migration files, will be applied if provided
-  -n, --name string         Database name (default "postgres")
-      --pass string         Database password (default "postgres")
-  -p, --port uint32         postgres default port (default 15432)
-  -u, --user string         Database username (default "postgres")
-  -v, --version string      Database version, default 14.3.2
+You can also download a prebuilt binary from [releases](https://github.com/mirzakhany/dbctl/releases) page!
 
-Global Flags:
-  -d, --detach   Detached mode: Run database in the background
-      --ui       Run ui component if available for chosen database
-```
 
-an example to run migrations and apply fixtures with be like this:
+Check the [docs](github.com/mirzakhany/dbctl/docs) for usage.
 
-```shell
-dbctl start pg -m ./migrations -f ./testdata
-```
-Out put:
 
-```shell
-2022/09/13 21:28:02 Starting postgres version 13-3.1 on port 15432 ...
-2022/09/13 21:28:04 Wait for database to boot up
-2022/09/13 21:28:07 Postgres is up and running
-2022/09/13 21:28:07 Applying migrations ...
-2022/09/13 21:28:07 Applying fixtures ...
-2022/09/13 21:28:07 Database uri is: "postgres://postgres:postgres@localhost:65432/postgres?sslmode=disable"
-```
+### Todo
 
-### Start a redis instance
-```shell
-dbctl start rs
-```
-It will start a redis instance using docker engine on port `16379`, with no username and password.
+- [x] Setup and run postgres database
+- [x] Setup and run redis
+- [x] A web base UI for portgres
+- [ ] Setup and run MongoDB
+- [ ] Support lua lang for redis in fixtures and migration scripts
+- [ ] Support for js in fixtures and migation scripts
+- [ ] Utilize golang templates to generate sample data.
+- [x] API server to let clients create databases
+- [x] Golang client
+- [ ] Python client (in progress)[PR](https://github.com/mirzakhany/dbctl/pull/17)
+- [ ] JS client
 
-Output:
-```shell
-2022/09/17 17:20:58 Starting redis version 7.0.4 on port 16379 ...
-2022/09/17 17:21:01 Wait for database to boot up
-2022/09/17 17:21:01 Database uri is: "redis://localhost:16379/0"
-```
 
-Flags:
-```shell
-      --db int           Redis db index
-  -h, --help             help for redis
-      --pass string      Database password
-  -p, --port uint32      Redis default port (default 16379)
-  -u, --user string      Database username
-  -v, --version string   Database version, default 7.0.4 for docker engine
-```
+## Contributing
+We welcome any and all contributions! Here are some ways you can get started:
+1. Report bugs: If you encounter any bugs, please let us know. Open up an issue and let us know the problem.
+2. Contribute code: If you are a developer and want to contribute, follow the instructions below to get started!
+3. Suggestions: If you don't want to code but have some awesome ideas, open up an issue explaining some updates or imporvements you would like to see!
+4. Documentation: If you see the need for some additional documentation, feel free to add some!
+
+## Instructions
+1. Fork this repository
+2. Clone the forked repository
+3. Add your contributions (code or documentation)
+4. Commit and push
+5. Wait for pull request to be merged
