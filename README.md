@@ -9,7 +9,7 @@ DBCTL is a tool designed to make running a database in a Docker container easy a
 - Enable users to quickly run tests in a fresh database.
 - Cleanup databases once you're finished using them!
 
-#### DBCTL is not intended for running databases in production. Its primary purpose is to simplify testing and practice with minimal hassle.
+#### DBCTL is not intended for running databases in production. Its primary purpose is to simplify testing and practice with no hassle.
 
 ## Install
 To install `dbctl` from it source:
