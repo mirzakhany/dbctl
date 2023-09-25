@@ -1,6 +1,6 @@
 # Manage running containers
 
-You can use `dbctl ls`` to view running containers managed by dbctl. This is particularly useful when running dbctl in detached mode (with the `-d` flag), as it runs the container and exits.
+You can use `dbctl ls` to view running containers managed by dbctl. This is particularly useful when running dbctl in detached mode (with the `-d` flag), as it runs the container and exits.
 
 To test it lets run a postgres database. 
 ```shell
