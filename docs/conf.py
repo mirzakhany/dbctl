@@ -10,7 +10,7 @@ import sphinx_rtd_theme
 project = 'dbctl'
 copyright = '2023, Mohsen Mirzakhani'
 author = 'Mohsen Mirzakhani'
-release = 'v0.4.2'
+release = 'v0.4.3'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
