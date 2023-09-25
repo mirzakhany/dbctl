@@ -16,13 +16,17 @@ import (
 	"time"
 
 	"github.com/docker/go-connections/nat"
+	"github.com/mirzakhany/dbctl/internal/logger"
 )
 
 const (
+	// LabelManagedBy is the label used to identify containers managed by dbctl
 	LabelManagedBy = "managed_by"
-	LabelDBctl     = "dbctl"
+	// LabelDBctl is the value of the managed_by label
+	LabelDBctl = "dbctl"
 )
 
+// Run creates and starts a container
 func Run(ctx context.Context, req CreateRequest) (*Container, error) {
 	if err := PullImage(ctx, req.Image); err != nil {
 		return nil, err
@@ -48,14 +52,17 @@ func Run(ctx context.Context, req CreateRequest) (*Container, error) {
 	return cn, nil
 }
 
+// Terminate stops and removes a container
 func (c *Container) Terminate(ctx context.Context) error {
 	return TerminateByID(ctx, c.ID)
 }
 
+// TerminateByID stops and removes a container by id
 func TerminateByID(ctx context.Context, id string) error {
 	return RemoveContainer(ctx, id)
 }
 
+// StartContainer starts a container by id
 func StartContainer(ctx context.Context, id string) error {
 	apiVersion, err := getAPIVersion(ctx)
 	if err != nil {
@@ -71,6 +78,7 @@ func StartContainer(ctx context.Context, id string) error {
 	return mapError(res)
 }
 
+// CreateContainer creates a container
 func CreateContainer(ctx context.Context, params CreateRequest) (string, error) {
 	apiVersion, err := getAPIVersion(ctx)
 	if err != nil {
@@ -138,11 +146,14 @@ func CreateContainer(ctx context.Context, params CreateRequest) (string, error) 
 	return re.ID, nil
 }
 
+// PullImage pulls a docker image
 func PullImage(ctx context.Context, image string) error {
 	apiVersion, err := getAPIVersion(ctx)
 	if err != nil {
 		return err
 	}
+
+	logger.Info(fmt.Sprintf("Pulling docker image: %q, depends on your connection speed it might take upto minutes", image))
 
 	path := fmt.Sprintf("/%s/images/create?fromImage=%s", apiVersion, image)
 	res, err := callDockerAPI(ctx, http.MethodPost, path, nil)
@@ -161,6 +172,7 @@ func PullImage(ctx context.Context, image string) error {
 	return mapError(res)
 }
 
+// List lists all containers with the given labels managed by dbctl
 func List(ctx context.Context, labels map[string]string) ([]*Container, error) {
 	apiVersion, err := getAPIVersion(ctx)
 	if err != nil {
