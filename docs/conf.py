@@ -6,11 +6,13 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import sphinx_rtd_theme
+import re
+import os
 
 project = 'dbctl'
 copyright = '2023, Mohsen Mirzakhani'
 author = 'Mohsen Mirzakhani'
-release = 'v0.4.3'
+release = re.sub('^', '', os.popen('git describe --tags').read().strip())
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
