@@ -67,3 +67,11 @@ Instructions
 
    testing/overview.md
    testing/golang.md
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference
+   :hidden:
+
+   reference/cli.md
+   reference/manage.md
