@@ -13,7 +13,7 @@ Use sdk in test:
 
 Install the sdk:
 ```shell
-go get github.com/mirzakhany/clients/dbctlgo
+go get github.com/mirzakhany/dbctl/clients/dbctlgo
 ```
 
 ```golang
@@ -23,7 +23,7 @@ import (
 	"database/sql"
 
 	"testing"
-    "github.com/mirzakhany/clients/dbctlgo"
+	"github.com/mirzakhany/dbctl/clients/dbctlgo"
 	// golang postgres driver
 	_ "github.com/lib/pq"
 )
@@ -90,7 +90,7 @@ import (
 	"database/sql"
 
 	"testing"
-    "github.com/mirzakhany/clients/dbctlgo"
+	"github.com/mirzakhany/dbctl/clients/dbctlgo"
 	"github.com/gomodule/redigo/redis"
 )
 

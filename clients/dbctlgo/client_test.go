@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/mirzakhany/clients/dbctlgo"
+	"github.com/mirzakhany/dbctl/clients/dbctlgo"
 
 	// golang postgres driver
 	_ "github.com/lib/pq"
