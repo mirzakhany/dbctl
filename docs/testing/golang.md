@@ -11,6 +11,11 @@ dbclt testing -- pg
 
 Use sdk in test:
 
+Install the sdk:
+```shell
+go get github.com/mirzakhany/clients/dbctlgo
+```
+
 ```golang
 package foo
 
@@ -18,13 +23,13 @@ import (
 	"database/sql"
 
 	"testing"
-    dbctl "github.com/mirzakhany/dbctl/clients/golang"
+    "github.com/mirzakhany/clients/dbctlgo"
 	// golang postgres driver
 	_ "github.com/lib/pq"
 )
 
 func TestMustCreatePostgresDB(t *testing.T) {
-	uri := dbctl.MustCreatePostgresDB(t)
+	uri := dbctlgo.MustCreatePostgresDB(t)
 	if uri == "" {
 		t.Fatal("url is empty")
 	}
@@ -57,7 +62,7 @@ func TestMustCreatePostgresDB(t *testing.T) {
 We can also apply migrations before starting the test. 
 ```golang
 func TestMustCreatePostgresDB(t *testing.T) {
-	uri := dbctl.MustCreatePostgresDB(t, dbctl.WithMigrations("./test_sql/schema"), dbctl.WithFixtures("./test_sql/fixtures"))
+	uri := dbctlgo.MustCreatePostgresDB(t, dbctlgo.WithMigrations("./test_sql/schema"), dbctlgo.WithFixtures("./test_sql/fixtures"))
 	if uri == "" {
 		t.Fatal("url is empty")
 	}
@@ -85,12 +90,12 @@ import (
 	"database/sql"
 
 	"testing"
-    dbctl "github.com/mirzakhany/dbctl/clients/golang"
+    "github.com/mirzakhany/clients/dbctlgo"
 	"github.com/gomodule/redigo/redis"
 )
 
 func TestRedis(t *testing.T) {
-	uri := dbctl.MustCreateRedisDB(t)
+	uri := dbctlgo.MustCreateRedisDB(t)
 	if uri == "" {
 		t.Fatal("url is empty")
 	}

@@ -1,17 +1,19 @@
-package golang
+package dbctlgo_test
 
 import (
 	"database/sql"
 
 	"testing"
-	// golang postgres driver
+
 	"github.com/gomodule/redigo/redis"
-	_ "github.com/gomodule/redigo/redis"
+	"github.com/mirzakhany/clients/dbctlgo"
+
+	// golang postgres driver
 	_ "github.com/lib/pq"
 )
 
 func TestMustCreatePostgresDB(t *testing.T) {
-	uri := MustCreatePostgresDB(t, WithMigrations("./test_sql/schema"))
+	uri := dbctlgo.MustCreatePostgresDB(t, dbctlgo.WithMigrations("../test_sql/schema"))
 	if uri == "" {
 		t.Fatal("url is empty")
 	}
@@ -51,7 +53,7 @@ func TestMustCreatePostgresDB(t *testing.T) {
 }
 
 func TestPostgresDBWithFixtures(t *testing.T) {
-	uri := MustCreatePostgresDB(t, WithMigrations("./test_sql/schema"), WithFixtures("./test_sql/fixtures"))
+	uri := dbctlgo.MustCreatePostgresDB(t, dbctlgo.WithMigrations("../test_sql/schema"), dbctlgo.WithFixtures("../test_sql/fixtures"))
 	if uri == "" {
 		t.Fatal("url is empty")
 	}
@@ -94,7 +96,7 @@ func TestPostgresDBWithFixtures(t *testing.T) {
 }
 
 func TestRedis(t *testing.T) {
-	uri := MustCreateRedisDB(t)
+	uri := dbctlgo.MustCreateRedisDB(t)
 	if uri == "" {
 		t.Fatal("url is empty")
 	}
