@@ -1,4 +1,4 @@
-module github.com/mirzakhany/dbctl/clients/golang/dbctl
+module github.com/mirzakhany/dbctl/clients/dbctlgo
 
 go 1.21.0
 
