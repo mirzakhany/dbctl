@@ -1,0 +1,19 @@
+name: Tag Golang SDK
+on:
+  push:
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+
+
+jobs:
+  job:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.ref.replace('/v', '/clients/dbctlgo/v'),
+              sha: context.sha
+            });
