@@ -18,12 +18,13 @@ import (
 	"database/sql"
 
 	"testing"
+    dbctl "github.com/mirzakhany/dbctl/clients/golang"
 	// golang postgres driver
 	_ "github.com/lib/pq"
 )
 
 func TestMustCreatePostgresDB(t *testing.T) {
-	uri := MustCreatePostgresDB(t)
+	uri := dbctl.MustCreatePostgresDB(t)
 	if uri == "" {
 		t.Fatal("url is empty")
 	}
@@ -56,7 +57,7 @@ func TestMustCreatePostgresDB(t *testing.T) {
 We can also apply migrations before starting the test. 
 ```golang
 func TestMustCreatePostgresDB(t *testing.T) {
-	uri := MustCreatePostgresDB(t, WithMigrations("./test_sql/schema"), WithFixtures("./test_sql/fixtures"))
+	uri := dbctl.MustCreatePostgresDB(t, dbctl.WithMigrations("./test_sql/schema"), dbctl.WithFixtures("./test_sql/fixtures"))
 	if uri == "" {
 		t.Fatal("url is empty")
 	}
@@ -84,11 +85,12 @@ import (
 	"database/sql"
 
 	"testing"
+    dbctl "github.com/mirzakhany/dbctl/clients/golang"
 	"github.com/gomodule/redigo/redis"
 )
 
 func TestRedis(t *testing.T) {
-	uri := MustCreateRedisDB(t)
+	uri := dbctl.MustCreateRedisDB(t)
 	if uri == "" {
 		t.Fatal("url is empty")
 	}
