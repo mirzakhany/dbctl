@@ -28,9 +28,14 @@ func runList(_ *cobra.Command, _ []string) error {
 	}
 
 	t := table.New(os.Stdout)
-	t.AddRow("ID", "Name", "Type")
+	t.AddRow("ID", "Name", "Type", "Label")
 	for _, c := range containers {
-		t.AddRow(c.ID[:12], c.Name, c.Labels[container.LabelType])
+		customeLable := ""
+		if l, ok := c.Labels[container.LabelCustom]; ok {
+			customeLable = l
+		}
+
+		t.AddRow(c.ID[:12], c.Name, c.Labels[container.LabelType], customeLable)
 	}
 
 	t.Print()

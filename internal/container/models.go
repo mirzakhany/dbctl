@@ -2,7 +2,12 @@ package container
 
 import "github.com/docker/go-connections/nat"
 
-const LabelType = "dbctl_type"
+const (
+	// LabelType is the label used to identify the type of database
+	LabelType = "dbctl_type"
+	// LabelCustom is the label used to identify a database
+	LabelCustom = "dbctl_custom"
+)
 
 type Container struct {
 	ID     string

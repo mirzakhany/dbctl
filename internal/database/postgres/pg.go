@@ -357,7 +357,7 @@ func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) 
 	}
 
 	port := strconv.Itoa(int(p.cfg.port))
-	pg, err := container.Run(ctx, container.CreateRequest{
+	req := container.CreateRequest{
 		Image: getPostGisImage(p.cfg.version),
 		Env: map[string]string{
 			"POSTGRES_PASSWORD": p.cfg.pass,
@@ -368,7 +368,13 @@ func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) 
 		ExposedPorts: []string{fmt.Sprintf("%s:5432/tcp", port)},
 		Name:         fmt.Sprintf("dbctl_pg_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: database.LabelPostgres},
-	})
+	}
+
+	if p.cfg.label != "" {
+		req.Labels[container.LabelCustom] = p.cfg.label
+	}
+
+	pg, err := container.Run(ctx, req)
 	if err != nil {
 		return nil, err
 	}
