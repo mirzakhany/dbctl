@@ -1,7 +1,6 @@
-from options import Config
+from .options import Config
 import os
 import requests
-import json
 
 class ErrInvalideDatabaseType(Exception):
     pass
@@ -10,7 +9,7 @@ DATABASE_POSTGRES = "postgres"
 DATABASE_REDIS = "redis"
 
 
-class CreateDatabaseRequest(dict):
+class CreateDatabaseRequest:
     db_type: str
     migrations: str
     fixtures: str
@@ -19,6 +18,15 @@ class CreateDatabaseRequest(dict):
     instance_user: str
     instance_pass: str
     instance_name: str
+
+    def __init__(self, db_type: str, migrations: str, fixtures: str, instance_port: int, instance_user: str, instance_pass: str, instance_name: str):
+        self.db_type = db_type
+        self.migrations = migrations
+        self.fixtures = fixtures
+        self.instance_port = instance_port
+        self.instance_user = instance_user
+        self.instance_pass = instance_pass
+        self.instance_name = instance_name
 
     def __dict__(self):
         return {
@@ -39,27 +47,46 @@ class CreateDatabaseResponse:
             "uri": self.uri
         }
     
-class RemoveDatabaseRequest(dict):
+class RemoveDatabaseRequest:
     db_type: str
     uri: str
+
+    def __init__(self, db_type: str, uri: str):
+        self.db_type = db_type
+        self.uri = uri
 
     def __dict__(self):
         return {
             "type": self.db_type,
             "uri": self.uri
-        }    
+        } 
 
 
+def must_create_postgres(config: Config = Config()) -> str:
+    return must_create_database(DATABASE_POSTGRES, config)
 
-def must_create_database(config: Config):
-    if config.database_type == DATABASE_POSTGRES:
-        create_database(config, DATABASE_POSTGRES)
-    elif config.database_type == DATABASE_REDIS:
-        create_database(config, DATABASE_REDIS)
+def must_create_redis(config: Config= Config()) -> str:
+    return must_create_database(DATABASE_REDIS, config)
+
+def must_create_database(database_type: str, config: Config= Config())-> str:
+    if database_type == DATABASE_POSTGRES:
+        return create_database(config, DATABASE_POSTGRES)
+    elif database_type == DATABASE_REDIS:
+        return create_database(config, DATABASE_REDIS)
     else:
-        raise ErrInvalideDatabaseType(f"Invalid database type: {config.database_type}")
+        raise ErrInvalideDatabaseType(f"Invalid database type: {database_type}")
 
-def create_database(config: Config, db_type: str ):
+def remove_database(database_type: str, uri: str, config: Config = Config()):
+    http_do_remove_database(
+        RemoveDatabaseRequest(
+            db_type=database_type,
+            uri=uri
+        ),
+        config.get_host_url()    
+    )
+
+
+def create_database(config: Config, db_type: str) -> str:
     migrations_path: str
     fixtures_path: str
 
@@ -79,7 +106,8 @@ def create_database(config: Config, db_type: str ):
         instance_name=config.instance_db_name
     )
 
-    http_do_create_database(req, config.get_host_url())
+    res = http_do_create_database(req, config.get_host_url())
+    return res.uri
 
 
 def http_do_create_database(req: CreateDatabaseRequest, host_url: str) -> CreateDatabaseResponse:
@@ -98,10 +126,12 @@ def http_do_create_database(req: CreateDatabaseRequest, host_url: str) -> Create
 
     files = []
     for file in migration_files:
-        files.append(("migrations", open(file, "rb")))
+        full_path = os.path.join(req.migrations, file)
+        files.append(("migrations", open(full_path, "rb")))
 
     for file in fixtures_files:
-        files.append(("fixtures", open(file, "rb")))
+        full_path = os.path.join(req.fixtures, file)
+        files.append(("fixtures", open(full_path, "rb")))
 
     req = requests.post(url, data=kv, files=files)    
     if req.status_code != 200:
@@ -110,12 +140,15 @@ def http_do_create_database(req: CreateDatabaseRequest, host_url: str) -> Create
     res = CreateDatabaseResponse()
     res.uri = req.json()["uri"]
 
+    for file in files:
+        file[1].close()
+
     return res
 
 def http_do_remove_database(req:RemoveDatabaseRequest, host_url: str):
     url = f"{host_url}/remove"
   
-    req = requests.post(url, data=req.__dict__())
+    req = requests.delete(url, data={"type": req.db_type, "uri": req.uri})
     if req.status_code != 204:
         raise Exception(f"Error removing database: {req.text}")
 

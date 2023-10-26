@@ -53,3 +53,25 @@ build_docker: ## Build docker image.
 install: ## build and install the dbctl
 	$(GOCMD) install -mod vendor $(LDFLAGS) $(GO_MAIN_SRC)
 
+.PHONY: db_up
+db_up: ## Run tests
+	go run main.go testing -- pg - rs
+
+.PHONY: db_down
+db_down: ## Run tests
+	go run main.go stop all
+
+.PHONY: test_clients
+test_clients: ## Run tests
+	make db_down
+	make db_up
+	rm -rf clients/python/venv
+	cd clients/dbctlgo && go test -v -cover ./... 
+	cd clients/python && \
+		python3 -m venv venv && \
+		source venv/bin/activate && \
+		pip3 install . && \
+		python3 -m unittest discover -v -s src/tests && \
+		deactivate && \
+		rm -rf venv
+	make db_down
