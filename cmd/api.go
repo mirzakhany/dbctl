@@ -29,13 +29,18 @@ func runTestingAPIServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid port args, %w", err)
 	}
 
+	label, err := cmd.Flags().GetString("label")
+	if err != nil {
+		return fmt.Errorf("invalid label args, %w", err)
+	}
+
 	testing, err := cmd.Flags().GetBool("testing")
 	if err != nil {
 		return fmt.Errorf("invalid testing args, %w", err)
 	}
 
 	if testing {
-		return apiserver.RunAPIServerContainer(utils.ContextWithOsSignal(), port, 20*time.Second)
+		return apiserver.RunAPIServerContainer(utils.ContextWithOsSignal(), port, label, 20*time.Second)
 	}
 
 	server := apiserver.NewServer(port)

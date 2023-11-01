@@ -15,5 +15,7 @@ command to run and manage databases for tests proposes`,
 		TraverseChildren: true,
 	}
 
+	cmd.PersistentFlags().String("label", "", "Label to add to the running container or api-server")
+
 	return cmd
 }

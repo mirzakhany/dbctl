@@ -13,6 +13,8 @@ type config struct {
 	dbIndex int
 	version string
 
+	label string
+
 	detached bool
 
 	logger io.Writer
@@ -32,6 +34,13 @@ func WithHost(user, pass string, dbIndex int, port uint32) Option {
 		c.pass = pass
 		c.port = port
 		c.dbIndex = dbIndex
+		return nil
+	}
+}
+
+func WithLabel(label string) Option {
+	return func(c *config) error {
+		c.label = label
 		return nil
 	}
 }

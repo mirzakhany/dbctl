@@ -15,13 +15,13 @@ import (
 const labelAPIServer = "apiserver"
 
 // RunAPIServerContainer runs a container with the apiserver image
-func RunAPIServerContainer(ctx context.Context, port string, timeout time.Duration) error {
+func RunAPIServerContainer(ctx context.Context, port, label string, timeout time.Duration) error {
 	var rnd, err = rand.Int(rand.Reader, big.NewInt(20))
 	if err != nil {
 		return err
 	}
 
-	_, err = container.Run(ctx, container.CreateRequest{
+	req := container.CreateRequest{
 		Image: "mirzakhani/dbctl:latest",
 		Env: map[string]string{
 			"DBCTL_INSIDE_DOCKER": "true",
@@ -30,7 +30,13 @@ func RunAPIServerContainer(ctx context.Context, port string, timeout time.Durati
 		ExposedPorts: []string{fmt.Sprintf("%s:1988/tcp", port)},
 		Name:         fmt.Sprintf("dbctl_apiserver_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: labelAPIServer},
-	})
+	}
+
+	if label != "" {
+		req.Labels[container.LabelCustom] = label
+	}
+
+	_, err = container.Run(ctx, req)
 	if err != nil {
 		return err
 	}

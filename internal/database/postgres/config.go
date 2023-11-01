@@ -17,6 +17,8 @@ type config struct {
 	port    uint32
 	version string
 
+	label string
+
 	withUI bool
 	logger io.Writer
 
@@ -43,6 +45,14 @@ type Option func(*config) error
 func WithUI(withIU bool) Option {
 	return func(c *config) error {
 		c.withUI = withIU
+		return nil
+	}
+}
+
+// WithLabel applied selected label to config
+func WithLabel(label string) Option {
+	return func(c *config) error {
+		c.label = label
 		return nil
 	}
 }

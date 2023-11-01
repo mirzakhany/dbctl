@@ -221,7 +221,8 @@ func (p *Redis) startUsingDocker(ctx context.Context, timeout time.Duration) (fu
 	}
 
 	port := strconv.Itoa(int(p.cfg.port))
-	pg, err := container.Run(ctx, container.CreateRequest{
+
+	req := container.CreateRequest{
 		Image: getRedisImage(p.cfg.version),
 		Cmd: []string{
 			"redis-server",
@@ -231,7 +232,13 @@ func (p *Redis) startUsingDocker(ctx context.Context, timeout time.Duration) (fu
 		ExposedPorts: []string{fmt.Sprintf("%s:6379/tcp", port)},
 		Name:         fmt.Sprintf("dbctl_rs_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: database.LabelRedis},
-	})
+	}
+
+	if p.cfg.label != "" {
+		req.Labels[container.LabelCustom] = p.cfg.label
+	}
+
+	pg, err := container.Run(ctx, req)
 	if err != nil {
 		return nil, err
 	}
