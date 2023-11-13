@@ -33,6 +33,11 @@ func runRedis(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("invalid port args, %w", err)
 	}
 
+	label, err := cmd.Flags().GetString("label")
+	if err != nil {
+		return fmt.Errorf("invalid label args, %w", err)
+	}
+
 	dbIndex, err := cmd.Flags().GetInt("db")
 	if err != nil {
 		return fmt.Errorf("invalid db index args, %w", err)
@@ -62,6 +67,7 @@ func runRedis(cmd *cobra.Command, _ []string) error {
 		redis.WithHost(user, pass, dbIndex, port),
 		redis.WithVersion(redisVersion),
 		redis.WithLogger(io.Discard),
+		redis.WithLabel(label),
 	)
 	if err != nil {
 		return err

@@ -253,6 +253,10 @@ func RemoveContainer(ctx context.Context, id string) error {
 		return err
 	}
 
+	if res.StatusCode == http.StatusNotFound {
+		return nil
+	}
+
 	return mapError(res)
 }
 

@@ -45,3 +45,13 @@ func GetListHash(list []string) string {
 	cc := sha256.Sum256([]byte(fmt.Sprintf("%x", list)))
 	return fmt.Sprintf("%x", cc[:])
 }
+
+// OneOf returns true if s is one of list
+func OneOf(s string, list ...string) bool {
+	for _, l := range list {
+		if s == l {
+			return true
+		}
+	}
+	return false
+}
