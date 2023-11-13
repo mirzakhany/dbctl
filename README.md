@@ -59,3 +59,10 @@ We welcome any and all contributions! Here are some ways you can get started:
 3. Add your contributions (code or documentation)
 4. Commit and push
 5. Wait for pull request to be merged
+
+
+## Supporters
+
+JetBrains generously granted me a year of their open-source support licenses to work on this project.
+
+<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" width="100" alt="JetBrains Logo (Main) logo.">
