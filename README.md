@@ -35,10 +35,10 @@ Please Check the [docs](https://dbctl.readthedocs.io) for usage.
 
 - [x] Setup and run postgres database
 - [x] Setup and run redis
-- [x] A web base UI for portgres
+- [x] A web base UI for Postgres
 - [ ] Setup and run MongoDB
 - [ ] Support lua lang for redis in fixtures and migration scripts
-- [ ] Support for js in fixtures and migation scripts
+- [ ] Support for js in fixtures and migration scripts
 - [ ] Utilize golang templates to generate sample data.
 - [x] API server to let clients create databases
 - [x] Golang client
@@ -50,7 +50,7 @@ Please Check the [docs](https://dbctl.readthedocs.io) for usage.
 We welcome any and all contributions! Here are some ways you can get started:
 1. Report bugs: If you encounter any bugs, please let us know. Open up an issue and let us know the problem.
 2. Contribute code: If you are a developer and want to contribute, follow the instructions below to get started!
-3. Suggestions: If you don't want to code but have some awesome ideas, open up an issue explaining some updates or imporvements you would like to see!
+3. Suggestions: If you don't want to code but have some awesome ideas, open up an issue explaining some updates or improvements you would like to see!
 4. Documentation: If you see the need for some additional documentation, feel free to add some!
 
 ## Instructions
