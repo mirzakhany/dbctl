@@ -75,3 +75,4 @@ Instructions
 
    reference/cli.md
    reference/manage.md
+   reference/labels.md

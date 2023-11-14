@@ -28,7 +28,7 @@ and you can pass the label to stop command as well:
 dbctl stop mydb
 ```
 
-Note that you can use any string as a label. dbctl will not validate it. and this label with be used for all 
-database that are running together. for example if you have two databases (ex, a postgres and a redis) running with the same label,
-
+Note that you can use any string as a label. dbctl will not validate it. and this label will be used for all 
+database that are running together. 
+for example if you have two databases (ex, a postgres and a redis) running with the same label, they will have the same label in the list of running containers.
 

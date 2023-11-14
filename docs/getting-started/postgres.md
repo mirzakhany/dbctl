@@ -57,7 +57,5 @@ Output:
 
 By running any combination of above command, you get a running postgres database. by pressing `CTRL+C` dbctl will shutting down and destroy the database container.
 
-
-#### Are your running multiple instances of dbctl?
 To make sure start and stop commands are not effecting other instances of dbctl, you can pass a label to dbctl.
 for more information please check [labels](../reference/labels.md) section.

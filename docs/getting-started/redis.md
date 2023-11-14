@@ -24,7 +24,7 @@ For example to use port `65474`:
 dbctl start rs -p 65474
 ```
 
-#### Are your running multiple instances of dbctl?
 To make sure start and stop commands are not effecting other instances of dbctl, you can pass a label to dbctl.
 for more information please check [labels](../reference/labels.md) section.
+
 
