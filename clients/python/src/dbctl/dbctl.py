@@ -148,9 +148,9 @@ def http_do_create_database(req: CreateDatabaseRequest, host_url: str) -> Create
 def http_do_remove_database(req:RemoveDatabaseRequest, host_url: str):
     url = f"{host_url}/remove"
   
-    req = requests.delete(url, data={"type": req.db_type, "uri": req.uri})
-    if req.status_code != 204:
-        raise Exception(f"Error removing database: {req.text}")
+    res = requests.delete(url, json={"type": req.db_type, "uri": req.uri})
+    if res.status_code != 204:
+        raise Exception(f"Error removing database: {res.json()}")
 
 def get_files_list(path: str) -> list[str]:
     # retrun list of files in path
