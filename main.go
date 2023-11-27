@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/mirzakhany/dbctl/cmd"
+	"github.com/mirzakhany/dbctl/cmd/describe"
 	"github.com/mirzakhany/dbctl/cmd/start"
 	"github.com/mirzakhany/dbctl/cmd/testing"
 )
@@ -24,6 +25,7 @@ func main() {
 	root.AddCommand(cmd.GetListCmd())
 	root.AddCommand(cmd.GetSelfUpdateCmd(version))
 	root.AddCommand(cmd.GetTestingAPIServerCmd())
+	root.AddCommand(describe.GetDescribeCmd())
 
 	// testing is able to run multiple commands includes starting the dbctl api server
 	root.AddCommand(testing.GetStartTestingCmd(root))
