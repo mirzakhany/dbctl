@@ -38,7 +38,7 @@ type CreateDBRequest struct {
 	Migrations string
 	Fixtures   string
 
-	WithDefaultMigraions bool
+	WithDefaultMigrations bool
 }
 
 type CreateDBResponse struct {

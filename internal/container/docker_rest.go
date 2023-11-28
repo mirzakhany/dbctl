@@ -260,6 +260,97 @@ func RemoveContainer(ctx context.Context, id string) error {
 	return mapError(res)
 }
 
+type DockerExecResponse struct {
+	ID string `json:"Id"`
+}
+
+func CreateExec(ctx context.Context, containerID string, cmd []string) (string, error) {
+	apiVersion, err := getAPIVersion(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	path := fmt.Sprintf("/%s/containers/%s/exec", apiVersion, containerID)
+	req := map[string]interface{}{
+		"Cmd":          cmd,
+		"Detach":       false,
+		"Tty":          false,
+		"AttachStdout": true,
+		"AttachStdin":  false,
+		"AttachStderr": true,
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := callDockerAPI(ctx, http.MethodPost, path, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+
+	if err := mapError(res); err != nil {
+		return "", err
+	}
+
+	d, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("read docker response failed: %w", err)
+	}
+
+	var re DockerExecResponse
+	err = json.NewDecoder(bytes.NewReader(d)).Decode(&re)
+	if err != nil {
+		return "", fmt.Errorf("read docker response failed: %w", err)
+	}
+
+	return re.ID, nil
+}
+
+func StartExec(ctx context.Context, execID string) (string, error) {
+	apiVersion, err := getAPIVersion(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	path := fmt.Sprintf("/%s/exec/%s/start", apiVersion, execID)
+	req := map[string]interface{}{
+		"Detach": false,
+		"Tty":    false,
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := callDockerAPI(ctx, http.MethodPost, path, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return "", mapError(res)
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
+}
+
+func RunExec(ctx context.Context, containerID string, cmd []string) (string, error) {
+	execID, err := CreateExec(ctx, containerID, cmd)
+	if err != nil {
+		return "", err
+	}
+
+	return StartExec(ctx, execID)
+}
+
 type errMessage struct {
 	Message string `json:"message"`
 }
