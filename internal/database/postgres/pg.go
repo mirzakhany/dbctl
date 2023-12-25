@@ -85,7 +85,7 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 	newDB, _ := New(WithHost(p.cfg.user, p.cfg.pass, dbName, p.cfg.port))
 	newURI := newDB.URI()
 
-	if req.WithDefaultMigraions {
+	if req.WithDefaultMigrations {
 		if err = p.createDatabaseWithTemplate(ctx, conn, dbName, DefaultTemplate); err != nil {
 			if errors.Is(err, errDatabaseNotExists) {
 				return nil, fmt.Errorf("default database not found, please create it first: %w", err)
@@ -397,6 +397,10 @@ func (p *Postgres) URI() string {
 
 	host := net.JoinHostPort(addr, strconv.Itoa(int(p.cfg.port)))
 	return (&url.URL{Scheme: "postgres", User: url.UserPassword(p.cfg.user, p.cfg.pass), Host: host, Path: p.cfg.name, RawQuery: "sslmode=disable"}).String()
+}
+
+func (p *Postgres) ContainerID() string {
+	return p.containerID
 }
 
 // RunMigrations runs migrations on a postgres database
