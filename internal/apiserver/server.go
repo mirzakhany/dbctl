@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -187,6 +188,8 @@ func (s *Server) RemoveDB(w http.ResponseWriter, r *http.Request) {
 
 	req := &RemoveDBRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		fmt.Println(err)
+		fmt.Println(req)
 		JSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -209,12 +212,14 @@ func (s *Server) RemoveDB(w http.ResponseWriter, r *http.Request) {
 		err = removeRedisDB(r.Context(), req)
 	}
 
+	fmt.Println(err)
+
 	if err != nil {
 		JSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	JSON(w, http.StatusNoContent, `"{"message":"db removed successfully"}"`)
+	JSON(w, http.StatusNoContent, nil)
 }
 
 func createPostgresDB(ctx context.Context, r *CreateDBRequest) (string, error) {
@@ -291,6 +296,10 @@ func JSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 
 	w.WriteHeader(status)
+	if data == nil {
+		return
+	}
+
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		logger.Error("error encoding json", err)
 		return
