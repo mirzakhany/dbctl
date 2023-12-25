@@ -3,7 +3,6 @@ package apiserver
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -188,8 +187,6 @@ func (s *Server) RemoveDB(w http.ResponseWriter, r *http.Request) {
 
 	req := &RemoveDBRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-		fmt.Println(err)
-		fmt.Println(req)
 		JSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -211,8 +208,6 @@ func (s *Server) RemoveDB(w http.ResponseWriter, r *http.Request) {
 	case "redis":
 		err = removeRedisDB(r.Context(), req)
 	}
-
-	fmt.Println(err)
 
 	if err != nil {
 		JSONError(w, http.StatusInternalServerError, err.Error())
