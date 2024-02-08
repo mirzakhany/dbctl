@@ -42,7 +42,7 @@ Please Check the [docs](https://dbctl.readthedocs.io) for usage.
 - [ ] Utilize golang templates to generate sample data.
 - [x] API server to let clients create databases
 - [x] Golang client
-- [ ] Python client (in progress)[PR](https://github.com/mirzakhany/dbctl/pull/17)
+- [x] Python client
 - [ ] JS client
 
 
