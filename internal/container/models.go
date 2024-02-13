@@ -1,7 +1,5 @@
 package container
 
-import "github.com/docker/go-connections/nat"
-
 const (
 	// LabelType is the label used to identify the type of database
 	LabelType = "dbctl_type"
@@ -22,27 +20,4 @@ type CreateRequest struct {
 	Cmd          []string
 	Env          map[string]string
 	Labels       map[string]string
-}
-
-type DockerCreateConfig struct {
-	Image        string            `json:"Image"`
-	Cmd          []string          `json:"Cmd"`
-	Labels       map[string]string `json:"Labels"`
-	Env          []string          `json:"Env"`
-	ExposedPorts nat.PortSet       `json:"ExposedPorts"`
-	HostConfig   HostConfig        `json:"HostConfig"`
-}
-
-type DockerCreateResponse struct {
-	ID string `json:"Id"`
-}
-
-type HostConfig struct {
-	PortBindings nat.PortMap
-}
-
-type ListContainerResponse struct {
-	ID     string `json:"Id"`
-	Names  []string
-	Labels map[string]string
 }
