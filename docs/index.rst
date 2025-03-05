@@ -23,8 +23,8 @@ Todo
 - Support lua lang for redis in fixtures and migration scripts
 - Support for js in fixtures and migration scripts
 - Utilize golang templates to generate sample data.
-- Python client (in progress)`PR <https://github.com/mirzakhany/dbctl/pull/17>`_
-- JS client
+- Python client.
+- JS client ( planned for future release )
 
 
 Contributing
