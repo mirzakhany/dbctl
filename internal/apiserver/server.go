@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mirzakhany/dbctl/internal/database"
+	"github.com/mirzakhany/dbctl/internal/database/mongodb"
 	pg "github.com/mirzakhany/dbctl/internal/database/postgres"
 	rs "github.com/mirzakhany/dbctl/internal/database/redis"
 	"github.com/mirzakhany/dbctl/internal/logger"
@@ -147,6 +148,8 @@ func (s *Server) CreateDB(w http.ResponseWriter, r *http.Request) {
 		uri, createErr = createPostgresDB(r.Context(), req)
 	case "redis":
 		uri, createErr = createRedisDB(r.Context(), req)
+	case "mongodb":
+		uri, createErr = createMongoDBDB(r.Context(), req)
 	}
 
 	if createErr != nil {
@@ -207,6 +210,8 @@ func (s *Server) RemoveDB(w http.ResponseWriter, r *http.Request) {
 		err = removePostgresDB(r.Context(), req)
 	case "redis":
 		err = removeRedisDB(r.Context(), req)
+	case "mongodb":
+		err = removeMongoDBDB(r.Context(), req)
 	}
 
 	if err != nil {
@@ -271,6 +276,20 @@ func createRedisDB(ctx context.Context, r *CreateDBRequest) (string, error) {
 	return res.URI, nil
 }
 
+func createMongoDBDB(ctx context.Context, r *CreateDBRequest) (string, error) {
+	mongoDbDB, _ := mongodb.New(mongodb.WithHost(r.InstanceUser, r.InstancePass, r.InstanceName, r.InstancePort))
+	res, err := mongoDbDB.CreateDB(ctx, &database.CreateDBRequest{
+		Migrations: r.Migrations,
+		Fixtures:   r.Fixtures,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return res.URI, nil
+}
+
 func removePostgresDB(ctx context.Context, r *RemoveDBRequest) error {
 	pgDB, _ := pg.New()
 	return pgDB.RemoveDB(ctx, r.URI)
@@ -279,6 +298,11 @@ func removePostgresDB(ctx context.Context, r *RemoveDBRequest) error {
 func removeRedisDB(ctx context.Context, r *RemoveDBRequest) error {
 	rsDB, _ := rs.New()
 	return rsDB.RemoveDB(ctx, r.URI)
+}
+
+func removeMongoDBDB(ctx context.Context, r *RemoveDBRequest) error {
+	mongoDbDB, _ := mongodb.New()
+	return mongoDbDB.RemoveDB(ctx, r.URI)
 }
 
 // JSONError writes the given status code and error message to the ResponseWriter.

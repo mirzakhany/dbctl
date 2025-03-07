@@ -25,6 +25,8 @@ const (
 	DatabasePostgres = "postgres"
 	// DatabaseRedis is a redis database
 	DatabaseRedis = "redis"
+	// DatabaseMongoDB is a mongodb database
+	DatabaseMongoDB = "mongodb"
 )
 
 // MustCreatePostgresDB create a postgres database and return connection string or fail the test
@@ -35,6 +37,11 @@ func MustCreatePostgresDB(t *testing.T, opts ...Option) string {
 // MustCreateRedisDB create a redis database and return connection string or fail the test
 func MustCreateRedisDB(t *testing.T, opts ...Option) string {
 	return MustCreateDB(t, DatabaseRedis, opts...)
+}
+
+// MustCreateMongoDB
+func MustCreateMongoDB(t *testing.T, ops ...Option) string {
+	return MustCreateDB(t, DatabaseMongoDB, ops...)
 }
 
 // MustCreateDB create a database and return connection string or fail the test
@@ -62,7 +69,7 @@ func RemoveDB(dbType, uri string) error {
 // CreateDB create a database and return connection string
 // it up to the caller to remove the database by calling RemoveDB
 func CreateDB(dbType string, opts ...Option) (string, error) {
-	if dbType != DatabaseRedis && dbType != DatabasePostgres {
+	if dbType != DatabaseRedis && dbType != DatabasePostgres && dbType != DatabaseMongoDB {
 		return "", ErrInvalidDatabaseType
 	}
 

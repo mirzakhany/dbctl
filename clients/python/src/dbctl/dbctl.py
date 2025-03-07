@@ -7,6 +7,7 @@ class ErrInvalideDatabaseType(Exception):
 
 DATABASE_POSTGRES = "postgres"
 DATABASE_REDIS = "redis"
+DATABASE_MONGODB = "mongodb"
 
 
 class CreateDatabaseRequest:
@@ -69,10 +70,8 @@ def must_create_redis(config: Config= Config()) -> str:
     return must_create_database(DATABASE_REDIS, config)
 
 def must_create_database(database_type: str, config: Config= Config())-> str:
-    if database_type == DATABASE_POSTGRES:
-        return create_database(config, DATABASE_POSTGRES)
-    elif database_type == DATABASE_REDIS:
-        return create_database(config, DATABASE_REDIS)
+    if database_type in [DATABASE_MONGODB, DATABASE_REDIS, DATABASE_POSTGRES]:
+        return create_database(config, database_type)
     else:
         raise ErrInvalideDatabaseType(f"Invalid database type: {database_type}")
 

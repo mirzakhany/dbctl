@@ -15,10 +15,12 @@ const (
 )
 
 const (
-	LabelPostgres = "postgres"
-	LabelPGWeb    = "pgweb"
-	LabelRedis    = "redis"
-	LabelTesting  = "testing"
+	LabelPostgres     = "postgres"
+	LabelPGWeb        = "pgweb"
+	LabelRedis        = "redis"
+	LabelMongoDB      = "mongodb"
+	LabelMongoExpress = "mongoexpress"
+	LabelTesting      = "testing"
 )
 
 type Info struct {

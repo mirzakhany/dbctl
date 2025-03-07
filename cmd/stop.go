@@ -6,6 +6,7 @@ import (
 
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
+	"github.com/mirzakhany/dbctl/internal/database/mongodb"
 	pg "github.com/mirzakhany/dbctl/internal/database/postgres"
 	"github.com/mirzakhany/dbctl/internal/database/redis"
 	"github.com/mirzakhany/dbctl/internal/utils"
@@ -15,7 +16,7 @@ import (
 // GetStopCmd represents the stop command
 func GetStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stop {rs pg id all <label>}",
+		Use:   "stop {rs pg mdb id all <label>}",
 		Short: "stop one or more detached databases",
 		Long: `using this command you can stop one or more detached databases by their type, id or label
 		for example: dbctl stop pg rs or dbctl stop 969ec9747052`,
@@ -44,6 +45,17 @@ func runStop(_ *cobra.Command, args []string) error {
 
 	if utils.Contain(args, "rs", "redis") {
 		items, err := redis.Instances(ctx)
+		if err != nil {
+			return err
+		}
+
+		if err := removeByInfo(ctx, items); err != nil {
+			return err
+		}
+	}
+
+	if utils.Contain(args, "mdb", "mongodb") {
+		items, err := mongodb.Instances(ctx)
 		if err != nil {
 			return err
 		}
@@ -121,5 +133,5 @@ func removeByLabel(ctx context.Context, label string) (int, error) {
 }
 
 func itsDBType(a string) bool {
-	return utils.OneOf(a, "pg", "postgres", "rs", "redis")
+	return utils.OneOf(a, "pg", "postgres", "rs", "redis", "mongodb", "mdb")
 }
