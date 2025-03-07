@@ -2,7 +2,6 @@ package dbctlgo
 
 import (
 	"database/sql"
-
 	"testing"
 
 	"github.com/gomodule/redigo/redis"

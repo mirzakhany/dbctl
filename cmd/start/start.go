@@ -16,5 +16,6 @@ func GetStartCmd() *cobra.Command {
 
 	cmd.AddCommand(GetPgCmd())
 	cmd.AddCommand(GetRedisCmd())
+	cmd.AddCommand(GetMongoDBCmd())
 	return cmd
 }
