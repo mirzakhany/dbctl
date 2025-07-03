@@ -6,7 +6,7 @@ To begin, you'll need DBCTL running in testing mode. In this example, we want to
 
 Start dbctl with a Postgres db
 ```shell
-dbclt testing -- pg
+dbctl testing -- pg
 ```
 
 Use sdk in test:
