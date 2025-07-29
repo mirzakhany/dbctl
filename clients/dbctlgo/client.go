@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -98,13 +99,14 @@ func CreateDB(dbType string, opts ...Option) (string, error) {
 	}
 
 	req := &CreateDBRequest{
-		Type:         dbType,
-		Migrations:   migrationsPath,
-		Fixtures:     fixturesPath,
-		InstanceName: cfg.instanceDBName,
-		InstancePass: cfg.instancePass,
-		InstancePort: cfg.instancePort,
-		InstanceUser: cfg.instanceUser,
+		Type:            dbType,
+		Migrations:      migrationsPath,
+		MigrationsRegex: cfg.migrationsFileRegex,
+		Fixtures:        fixturesPath,
+		InstanceName:    cfg.instanceDBName,
+		InstancePass:    cfg.instancePass,
+		InstancePort:    cfg.instancePort,
+		InstanceUser:    cfg.instanceUser,
 	}
 
 	res, err := httpDoCreateDBRequest(req, cfg.getHostURL())
@@ -123,9 +125,10 @@ type ErrorMessage struct {
 
 // CreateDBRequest is the request object for creating a database
 type CreateDBRequest struct {
-	Type       string `json:"type"`
-	Migrations string `json:"migrations"`
-	Fixtures   string `json:"fixtures"`
+	Type            string `json:"type"`
+	Migrations      string `json:"migrations"`
+	MigrationsRegex string `json:"migrations_regex,omitempty"` // optional regex to filter migration files
+	Fixtures        string `json:"fixtures"`
 
 	// postgres instance information
 	InstancePort uint32 `json:"instance_port"`
@@ -161,13 +164,13 @@ func httpDoCreateDBRequest(r *CreateDBRequest, baseURL string) (*CreateDBRespons
 	bodyBuf := &bytes.Buffer{}
 	bodyWriter := multipart.NewWriter(bodyBuf)
 
-	migrationFiles, err := getFilesList(r.Migrations)
+	migrationFiles, err := getFilesList(r.Migrations, r.MigrationsRegex)
 	if err != nil {
 		log.Println("getFilesList migraions failed:", err)
 		return nil, err
 	}
 
-	fixtureFiles, err := getFilesList(r.Fixtures)
+	fixtureFiles, err := getFilesList(r.Fixtures, "")
 	if err != nil {
 		log.Println("getFilesList fixtures failed:", err)
 		return nil, err
@@ -272,7 +275,7 @@ func checkForError(r *http.Response) error {
 }
 
 // getFilesList returns a list of files in a directory
-func getFilesList(dir string) ([]string, error) {
+func getFilesList(dir string, regexPattern string) ([]string, error) {
 	if dir == "" {
 		return nil, nil
 	}
@@ -287,9 +290,23 @@ func getFilesList(dir string) ([]string, error) {
 		return nil, err
 	}
 
+	var regex *regexp.Regexp
+	if regexPattern != "" {
+		regex, err = regexp.Compile(regexPattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regex pattern: %w", err)
+		}
+	}
+
 	var out []string
 	for _, f := range files {
-		out = append(out, filepath.Join(absPath, f.Name()))
+		if f.IsDir() {
+			continue
+		}
+		fullPath := filepath.Join(absPath, f.Name())
+		if regex == nil || regex.MatchString(f.Name()) {
+			out = append(out, fullPath)
+		}
 	}
 
 	return out, nil
