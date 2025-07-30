@@ -7,8 +7,10 @@ import (
 
 // config is the client configuration.
 type config struct {
-	migrations string
-	fixtures   string
+	migrations          string
+	migrationsFileRegex string
+
+	fixtures string
 
 	// whether or not to use default migrations/fixtures loaded when dbctl started
 	withDefaultMigrations bool
@@ -77,6 +79,14 @@ func WithHost(address string, port uint32) Option {
 	return func(cfg *config) error {
 		cfg.hostAddress = address
 		cfg.hostPort = port
+		return nil
+	}
+}
+
+// WithMigrationsFileRegex configures the client to use the given regex to match what migrations file to apply.
+func WithMigrationsFileRegex(regex string) Option {
+	return func(cfg *config) error {
+		cfg.migrationsFileRegex = regex
 		return nil
 	}
 }

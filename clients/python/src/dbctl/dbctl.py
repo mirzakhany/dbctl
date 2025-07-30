@@ -1,5 +1,6 @@
 from .options import Config
 import os
+import re
 import requests
 
 class ErrInvalideDatabaseType(Exception):
@@ -13,6 +14,7 @@ DATABASE_MONGODB = "mongodb"
 class CreateDatabaseRequest:
     db_type: str
     migrations: str
+    migrations_file_regex: str
     fixtures: str
 
     instance_port: int
@@ -20,9 +22,10 @@ class CreateDatabaseRequest:
     instance_pass: str
     instance_name: str
 
-    def __init__(self, db_type: str, migrations: str, fixtures: str, instance_port: int, instance_user: str, instance_pass: str, instance_name: str):
+    def __init__(self, db_type: str, migrations: str, fixtures: str, instance_port: int, instance_user: str, instance_pass: str, instance_name: str, migrations_file_regex: str):
         self.db_type = db_type
         self.migrations = migrations
+        self.migrations_file_regex = migrations_file_regex
         self.fixtures = fixtures
         self.instance_port = instance_port
         self.instance_user = instance_user
@@ -33,6 +36,7 @@ class CreateDatabaseRequest:
         return {
             "type": self.db_type,
             "migrations": self.migrations,
+            "migrations_file_regex": self.migrations_file_regex,
             "fixtures": self.fixtures,
             "instance_port": self.instance_port,
             "instance_user": self.instance_user,
@@ -47,7 +51,7 @@ class CreateDatabaseResponse:
         return {
             "uri": self.uri
         }
-    
+
 class RemoveDatabaseRequest:
     db_type: str
     uri: str
@@ -60,7 +64,7 @@ class RemoveDatabaseRequest:
         return {
             "type": self.db_type,
             "uri": self.uri
-        } 
+        }
 
 
 def must_create_postgres(config: Config = Config()) -> str:
@@ -81,7 +85,7 @@ def remove_database(database_type: str, uri: str, config: Config = Config()):
             db_type=database_type,
             uri=uri
         ),
-        config.get_host_url()    
+        config.get_host_url()
     )
 
 
@@ -98,6 +102,7 @@ def create_database(config: Config, db_type: str) -> str:
     req = CreateDatabaseRequest(
         db_type=db_type,
         migrations=migrations_path,
+        migrations_file_regex=config.migrations_file_regex,
         fixtures=fixtures_path,
         instance_port=config.instance_port,
         instance_user=config.instance_user,
@@ -112,8 +117,8 @@ def create_database(config: Config, db_type: str) -> str:
 def http_do_create_database(req: CreateDatabaseRequest, host_url: str) -> CreateDatabaseResponse:
     url = f"{host_url}/create"
 
-    migration_files = get_files_list(req.migrations)
-    fixtures_files = get_files_list(req.fixtures)
+    migration_files = get_files_list(req.migrations, req.migrations_file_regex)
+    fixtures_files = get_files_list(req.fixtures, "")
 
     kv = {
         "type": req.db_type,
@@ -132,10 +137,10 @@ def http_do_create_database(req: CreateDatabaseRequest, host_url: str) -> Create
         full_path = os.path.join(req.fixtures, file)
         files.append(("fixtures", open(full_path, "rb")))
 
-    req = requests.post(url, data=kv, files=files)    
+    req = requests.post(url, data=kv, files=files)
     if req.status_code != 200:
         raise Exception(f"Error creating database: {req.text}")
-    
+
     res = CreateDatabaseResponse()
     res.uri = req.json()["uri"]
 
@@ -146,11 +151,25 @@ def http_do_create_database(req: CreateDatabaseRequest, host_url: str) -> Create
 
 def http_do_remove_database(req:RemoveDatabaseRequest, host_url: str):
     url = f"{host_url}/remove"
-  
+
     res = requests.delete(url, json={"type": req.db_type, "uri": req.uri})
     if res.status_code != 204:
         raise Exception(f"Error removing database: {res.json()}")
 
-def get_files_list(path: str) -> list[str]:
-    # retrun list of files in path
-    return os.listdir(path)
+def get_files_list(path: str, regex_pattern: str = "") -> list[str]:
+    # retrun list of files in path, optionally filtered by regex pattern
+    if not path or not os.path.exists(path):
+        return []
+
+    files = os.listdir(path)
+
+    if regex_pattern:
+        try:
+            pattern = re.compile(regex_pattern)
+            files = [f for f in files if os.path.isfile(os.path.join(path, f)) and pattern.search(f)]
+        except re.error as e:
+            raise Exception(f"Invalid regex pattern: {e}")
+    else:
+        files = [f for f in files if os.path.isfile(os.path.join(path, f))]
+
+    return files

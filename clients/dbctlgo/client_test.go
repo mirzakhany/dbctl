@@ -50,6 +50,45 @@ func TestMustCreatePostgresDB(t *testing.T) {
 	}
 }
 
+func TestPostgresDbWithMigrationsAndRegex(t *testing.T) {
+	uri := MustCreatePostgresDB(t, WithMigrations("../test_sql/schema"), WithMigrationsFileRegex("^.*\\.up\\.sql$"))
+	if uri == "" {
+		t.Fatal("url is empty")
+	}
+	t.Log("uri:", uri)
+
+	conn, err := sql.Open("postgres", uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := conn.Ping(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	// do something with conn
+	res, err := conn.Exec("insert into foo (name) values ('test-must-create-db')")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if re, _ := res.RowsAffected(); re != 1 {
+		t.Fatal("expected 1 rows affected")
+	}
+
+	var name string
+	if err := conn.QueryRow("select name from foo").Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+
+	if name != "test-must-create-db" {
+		t.Fatalf("expected name to be test-must-create-db, got %s", name)
+	}
+}
+
 func TestPostgresDBWithFixtures(t *testing.T) {
 	uri := MustCreatePostgresDB(t, WithMigrations("../test_sql/schema"), WithFixtures("../test_sql/fixtures"))
 	if uri == "" {
