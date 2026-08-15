@@ -20,6 +20,20 @@ type config struct {
 	detached bool
 
 	logger io.Writer
+
+	fixtureFiles []string
+}
+
+// WithFixtures applies the selected fixtures to config
+func WithFixtures(path string) Option {
+	return func(c *config) error {
+		files, err := getFiles(path)
+		if err != nil {
+			return fmt.Errorf("read fixtures failed: %w", err)
+		}
+		c.fixtureFiles = files
+		return nil
+	}
 }
 
 var (

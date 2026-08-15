@@ -104,3 +104,28 @@ func TestRedis(t *testing.T) {
 }
 ```
 
+
+## Configuration
+
+The client reads `DBCTL_HOST` and `DBCTL_PORT`, so pointing a suite at a particular dbctl
+server needs no change to the test code:
+
+```shell
+DBCTL_PORT=1989 go test ./...
+```
+
+Options override the environment for a single call:
+
+```golang
+uri := dbctlgo.MustCreatePostgresDB(t,
+    dbctlgo.WithHost("localhost", 1989),
+    dbctlgo.WithMigrations("./migrations"),
+)
+```
+
+You do not have to tell the client which port the database itself runs on: the server looks
+the running instance up. `WithInstance` is only needed when the instance was started with
+credentials of your own.
+
+Migrations may live in subdirectories, they are applied in the order of their paths, and
+`*.down.sql` files are skipped.

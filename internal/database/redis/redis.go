@@ -18,6 +18,7 @@ import (
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
 	"github.com/mirzakhany/dbctl/internal/logger"
+	"github.com/mirzakhany/dbctl/internal/utils"
 )
 
 var (
@@ -67,7 +68,7 @@ func New(options ...Option) (*Redis, error) {
 const indexKeyPrefix = "dbctl:db:"
 
 // CreateDB creates a new database
-func (p *Redis) CreateDB(ctx context.Context, _ *database.CreateDBRequest) (*database.CreateDBResponse, error) {
+func (p *Redis) CreateDB(ctx context.Context, req *database.CreateDBRequest) (*database.CreateDBResponse, error) {
 	conn, err := redis.DialURLContext(ctx, p.adminURI())
 	if err != nil {
 		return nil, err
@@ -87,7 +88,35 @@ func (p *Redis) CreateDB(ctx context.Context, _ *database.CreateDBRequest) (*dat
 		return nil, err
 	}
 
+	if req != nil && req.Fixtures != "" {
+		files, err := getFiles(req.Fixtures)
+		if err != nil {
+			return nil, fmt.Errorf("read fixtures failed: %w", err)
+		}
+
+		if err := p.applyFixturesTo(ctx, newDB.URI(), files); err != nil {
+			return nil, err
+		}
+	}
+
 	return &database.CreateDBResponse{URI: hostURI(newDB.URI())}, nil
+}
+
+// applyFixturesTo loads the fixture files into the database the uri points at.
+func (p *Redis) applyFixturesTo(ctx context.Context, uri string, files []string) error {
+	if len(files) == 0 {
+		return nil
+	}
+
+	conn, err := redis.DialURLContext(ctx, uri)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	return applyFixtures(conn, files)
 }
 
 // acquireDBIndex claims the first unused redis database index. Redis exposes a
@@ -197,10 +226,16 @@ func hostURI(uri string) string {
 
 // Start starts the database
 func (p *Redis) Start(ctx context.Context, detach bool) error {
-	log.Printf("Starting redis version %s on port %d ...\n", p.cfg.version, p.cfg.port)
+	log.Printf("Starting redis version %s ...\n", p.cfg.version)
 
 	closeFunc, err := p.startUsingDocker(ctx, 20*time.Second)
 	if err != nil {
+		_ = closeFunc(ctx)
+		return err
+	}
+
+	// apply fixtures to the database this instance points at
+	if err := p.applyFixturesTo(ctx, p.URI(), p.cfg.fixtureFiles); err != nil {
 		_ = closeFunc(ctx)
 		return err
 	}
@@ -279,6 +314,12 @@ func (p *Redis) startUsingDocker(ctx context.Context, timeout time.Duration) (fu
 		return nil, err
 	}
 
+	// port 0 asks for any free port, so that several projects can run their tests
+	// at the same time.
+	if p.cfg.port == 0 {
+		p.cfg.port = uint32(utils.GetAvailablePort())
+	}
+
 	port := strconv.Itoa(int(p.cfg.port))
 
 	req := container.CreateRequest{
@@ -288,9 +329,13 @@ func (p *Redis) startUsingDocker(ctx context.Context, timeout time.Duration) (fu
 			"--save", "",
 			"--databases", "2000",
 		},
-		ExposedPorts: []string{fmt.Sprintf("%s:6379/tcp", port)},
+		ExposedPorts: []string{container.PortSpec(port, "6379/tcp")},
 		Name:         fmt.Sprintf("dbctl_rs_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: database.LabelRedis},
+	}
+
+	for k, v := range database.ConnectionLabels(p.cfg.user, p.cfg.pass, "", p.cfg.port) {
+		req.Labels[k] = v
 	}
 
 	if p.cfg.label != "" {

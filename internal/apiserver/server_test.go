@@ -3,6 +3,7 @@ package apiserver
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -10,7 +11,7 @@ import (
 // A request without any file attached is not multipart encoded. The server used
 // to dereference the missing form and take the connection down with it.
 func TestCreateDBWithoutFilesDoesNotPanic(t *testing.T) {
-	s := NewServer(DefaultPort)
+	s := NewServer(DefaultPort, "")
 
 	req := httptest.NewRequest(http.MethodPost, "/create",
 		strings.NewReader("type=postgres&instance_port=1"))
@@ -40,7 +41,7 @@ func TestValidateType(t *testing.T) {
 }
 
 func TestCreateDBRejectsInvalidPort(t *testing.T) {
-	s := NewServer(DefaultPort)
+	s := NewServer(DefaultPort, "")
 
 	req := httptest.NewRequest(http.MethodPost, "/create",
 		strings.NewReader("type=postgres&instance_port=not-a-port"))
@@ -51,6 +52,33 @@ func TestCreateDBRejectsInvalidPort(t *testing.T) {
 
 	if res.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for an unparsable port, got %d", res.Code)
+	}
+}
+
+func TestUploadPath(t *testing.T) {
+	ok := map[string]string{
+		"001_init.up.sql":            "001_init.up.sql",
+		"tenant%2F001_init.up.sql":   "tenant/001_init.up.sql",
+		"a%2Fb%2F002_second.up.sql":  "a/b/002_second.up.sql",
+		"50%25_off.sql":              "50%_off.sql",
+		"plain_name_with_%_char.sql": "plain_name_with_%_char.sql",
+	}
+
+	for in, want := range ok {
+		got, err := uploadPath(in)
+		if err != nil {
+			t.Fatalf("%q: %v", in, err)
+		}
+		if got != filepath.FromSlash(want) {
+			t.Fatalf("%q: expected %q, got %q", in, want, got)
+		}
+	}
+
+	// an upload must never be able to write outside its directory
+	for _, in := range []string{"..%2F..%2Fetc%2Fpasswd", "%2Fetc%2Fpasswd", "..", "."} {
+		if got, err := uploadPath(in); err == nil {
+			t.Fatalf("expected %q to be rejected, got %q", in, got)
+		}
 	}
 }
 

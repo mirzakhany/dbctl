@@ -1,4 +1,5 @@
 from .options import Config
+from urllib.parse import quote
 import os
 import re
 import requests
@@ -91,12 +92,13 @@ def must_create_database(database_type: str, config: Config = None) -> str:
     return create_database(config if config is not None else Config(), database_type)
 
 def remove_database(database_type: str, uri: str, config: Config = None):
+    cfg = config if config is not None else Config()
     http_do_remove_database(
         RemoveDatabaseRequest(
             db_type=database_type,
             uri=uri
         ),
-        (config if config is not None else Config()).get_host_url()
+        cfg.get_host_url()
     )
 
 
@@ -151,15 +153,18 @@ def http_do_create_database(req: CreateDatabaseRequest, host_url: str) -> Create
     files = []
     opened = []
     try:
+        # multipart parsing reduces a name to its last element, so the path relative
+        # to the migrations directory is escaped to survive the trip and files in
+        # subdirectories keep both their place and their order.
         for name in migration_files:
             handle = open(os.path.join(req.migrations, name), "rb")
             opened.append(handle)
-            files.append(("migrations", (name, handle)))
+            files.append(("migrations", (quote(name, safe=""), handle)))
 
         for name in fixtures_files:
             handle = open(os.path.join(req.fixtures, name), "rb")
             opened.append(handle)
-            files.append(("fixtures", (name, handle)))
+            files.append(("fixtures", (quote(name, safe=""), handle)))
 
         # requests falls back to a urlencoded body when no file is attached, while
         # the server always expects a multipart one. this placeholder keeps the
@@ -193,14 +198,21 @@ def error_message(res) -> str:
         return res.text or f"server returned status {res.status_code}"
 
 def get_files_list(path: str, regex_pattern: str = "") -> list[str]:
-    # return the file names in path, optionally filtered by regex pattern
+    """Return the files in path and its subdirectories, as paths relative to it.
+
+    The regex, when given, is matched against those relative paths.
+    """
     if not path:
         return []
 
     if not os.path.isdir(path):
         raise ErrDBCtl(f"{path} is not an existing directory")
 
-    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    files = []
+    for root, _, names in os.walk(path):
+        for name in names:
+            rel = os.path.relpath(os.path.join(root, name), path)
+            files.append(rel.replace(os.sep, "/"))
 
     if regex_pattern:
         try:

@@ -3,12 +3,15 @@ package mongodb
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/mirzakhany/dbctl/internal/utils"
 )
 
 type config struct {
@@ -179,19 +182,31 @@ func getFiles(path string) ([]string, error) {
 		return out, nil
 	}
 
-	files, err := os.ReadDir(path)
-	if err != nil {
-		return nil, err
-	}
-
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range files {
-		out = append(out, filepath.Join(absPath, f.Name()))
+
+	// walk into subdirectories, migrations are commonly grouped in folders
+	err = filepath.WalkDir(absPath, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// only the scripts mongodb knows how to apply, a directory can hold a
+		// readme or a checked in .gitkeep next to the migrations.
+		if d.IsDir() || !utils.OneOf(strings.ToLower(filepath.Ext(d.Name())), ".js", ".json") {
+			return nil
+		}
+
+		out = append(out, p)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
+	// sorted by path, so nested files keep the order their names imply
 	sort.Strings(out)
 	return out, nil
 }

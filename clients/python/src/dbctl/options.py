@@ -1,5 +1,12 @@
+import os
+
 DEFAULT_HOST_ADDRESS = "localhost"
 DEFAULT_HOST_PORT = 1988
+
+# Environment variables read when no argument overrides them, so that a project can
+# point its tests at its own dbctl server without touching the test code.
+ENV_HOST = "DBCTL_HOST"
+ENV_PORT = "DBCTL_PORT"
 
 # The instance details default to empty: the server knows the defaults of each
 # database type and fills in the missing ones. Sending the postgres defaults for
@@ -40,8 +47,8 @@ class Config:
         self.instance_pass = kwargs.get("instance_pass", DEFAULT_INSTANCE_PASS)
         self.instance_db_name = kwargs.get("instance_db_name", DEFAULT_INSTANCE_DB_NAME)
 
-        self.host_address = kwargs.get("host_address", DEFAULT_HOST_ADDRESS)
-        self.host_port = kwargs.get("host_port", DEFAULT_HOST_PORT)
+        self.host_address = kwargs.get("host_address", os.environ.get(ENV_HOST, DEFAULT_HOST_ADDRESS))
+        self.host_port = int(kwargs.get("host_port", os.environ.get(ENV_PORT, DEFAULT_HOST_PORT)))
 
     def use_default_migrations(self):
         """Reuse the migrations the instance was started with."""

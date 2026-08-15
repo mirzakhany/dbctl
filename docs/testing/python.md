@@ -74,7 +74,10 @@ config = (dbctl.Config()
 | `with_default_migrations` | `False` | reuse the migrations the instance was started with instead of uploading them |
 | `instance_user` / `instance_pass` / `instance_db_name` | *(per database type)* | credentials of the instance dbctl started, only needed when it was started with custom ones |
 | `instance_port` | *(per database type)* | port the instance listens on, must match the `-p` used at start |
-| `host_address` / `host_port` | `localhost` / `1988` | address of the dbctl api server |
+| `host_address` / `host_port` | `$DBCTL_HOST` / `$DBCTL_PORT`, else `localhost` / `1988` | address of the dbctl api server |
+
+Migrations and fixtures may be organised in subdirectories; they are applied in the order of
+their paths.
 
 A migrations or fixtures path that does not exist raises `ErrDBCtl` rather than quietly
 creating an empty database. Requests that fail server side raise `ErrDBCtl` with the

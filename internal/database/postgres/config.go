@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -199,24 +200,31 @@ func getFiles(path string) ([]string, error) {
 		return out, nil
 	}
 
-	files, err := os.ReadDir(path)
-	if err != nil {
-		return nil, err
-	}
-
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range files {
+
+	// walk into subdirectories, migrations are commonly grouped in folders
+	err = filepath.WalkDir(absPath, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
 		// only sql files are applied, a directory can hold a readme or a
 		// checked in .gitkeep next to the migrations.
-		if f.IsDir() || !strings.EqualFold(filepath.Ext(f.Name()), ".sql") {
-			continue
+		if d.IsDir() || !strings.EqualFold(filepath.Ext(d.Name()), ".sql") {
+			return nil
 		}
-		out = append(out, filepath.Join(absPath, f.Name()))
+
+		out = append(out, p)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
+	// sorted by path, so nested files keep the order their names imply
 	sort.Strings(out)
 	return out, nil
 }
@@ -225,7 +233,12 @@ func getFiles(path string) ([]string, error) {
 // Hashing the content rather than the paths is what makes the template reusable:
 // the api server writes every request's uploads into a fresh temporary directory,
 // so paths differ on every call while the migrations themselves do not.
-func templateName(files []string) (string, error) {
+func templateName(root string, files []string) (string, error) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+
 	h := sha256.New()
 	for _, f := range files {
 		b, err := os.ReadFile(f)
@@ -233,9 +246,15 @@ func templateName(files []string) (string, error) {
 			return "", fmt.Errorf("read migration file (%s) failed: %w", f, err)
 		}
 
-		// include the name so that renaming or reordering migrations yields a
-		// different template.
-		h.Write([]byte(filepath.Base(f)))
+		// include the name relative to the migrations directory, so that renaming
+		// or moving a migration yields a different template while the temporary
+		// directory the api server unpacked it into does not.
+		name, err := filepath.Rel(absRoot, f)
+		if err != nil {
+			name = filepath.Base(f)
+		}
+
+		h.Write([]byte(filepath.ToSlash(name)))
 		h.Write(b)
 	}
 

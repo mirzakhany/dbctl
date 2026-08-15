@@ -55,6 +55,43 @@ The testing command runs the databases in detached mode, causing cli to exit whe
 dbctl stop all
 ```
 
+## Running several projects at once
+
+Pass `-p 0` to let dbctl pick a free port for a database, and `--api-port` to move the api
+server off its default. Clients do not need to be told which port a database ended up on:
+the api server looks the instance up itself.
+
+```shell
+dbctl testing --label myproject --api-port 1989 -- pg -p 0 - rs -p 0
+```
+
+The clients read `DBCTL_HOST` and `DBCTL_PORT`, so pointing a test suite at that server
+takes no code change:
+
+```shell
+DBCTL_PORT=1989 go test ./...
+```
+
+Databases started with `-p 0` are found by the api server itself, so nothing else has to be
+told which port they ended up on.
+
+## Reachability
+
+Everything dbctl starts is published to `127.0.0.1`, so the databases and the api server are
+reachable from your machine only. This matters because they run with well known credentials:
+a port published to every interface would hand them to anyone on your network, and docker's
+own rules sit in front of the host firewall, so a firewall would not stop it.
+
+Pass `--listen` when a database genuinely has to be reachable from elsewhere, for instance
+from a CI runner on another host. dbctl prints a warning when you do, and nothing else
+protects the databases at that point:
+
+```shell
+dbctl start pg --listen 0.0.0.0
+```
+
+## Stopping
+
 `stop all` stops every dbctl container on the machine. To only stop the ones belonging to
 this project, start them with a label and stop them by it:
 

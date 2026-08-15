@@ -3,12 +3,14 @@ package apiserver
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"net"
 	"time"
 
 	"github.com/mirzakhany/dbctl/internal/container"
+	"github.com/mirzakhany/dbctl/internal/database"
 	"github.com/mirzakhany/dbctl/internal/logger"
 )
 
@@ -21,13 +23,32 @@ func RunAPIServerContainer(ctx context.Context, port, label string, timeout time
 		return err
 	}
 
+	// the container has no access to docker, so it is told which instances are
+	// running and how to reach them.
+	instances, err := database.FindInstances(ctx, label)
+	if err != nil {
+		return err
+	}
+
+	encoded, err := json.Marshal(instances)
+	if err != nil {
+		return err
+	}
+
+	env := map[string]string{
+		"DBCTL_INSIDE_DOCKER": "true",
+		EnvInstances:          string(encoded),
+	}
+
+	if label != "" {
+		env[EnvLabel] = label
+	}
+
 	req := container.CreateRequest{
-		Image: "mirzakhani/dbctl:latest",
-		Env: map[string]string{
-			"DBCTL_INSIDE_DOCKER": "true",
-		},
+		Image:        "mirzakhani/dbctl:latest",
+		Env:          env,
 		Cmd:          []string{"/dbctl", "api-server"},
-		ExposedPorts: []string{fmt.Sprintf("%s:1988/tcp", port)},
+		ExposedPorts: []string{container.PortSpec(port, "1988/tcp")},
 		Name:         fmt.Sprintf("dbctl_apiserver_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: labelAPIServer},
 	}

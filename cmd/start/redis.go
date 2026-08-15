@@ -23,6 +23,7 @@ func GetRedisCmd() *cobra.Command {
 	cmd.Flags().StringP("user", "u", "", "Database username")
 	cmd.Flags().String("pass", "", "Database password")
 	cmd.Flags().StringP("version", "v", "", "Database version, default 7.0.4 for docker engine")
+	cmd.Flags().StringP("fixtures", "f", "", "Path to fixture files, .lua files are evaluated as scripts, other files hold one redis command per line")
 
 	return cmd
 }
@@ -63,11 +64,17 @@ func runRedis(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("invalid version args, %w", err)
 	}
 
+	fixturesPath, err := cmd.Flags().GetString("fixtures")
+	if err != nil {
+		return fmt.Errorf("invalid fixtures args, %w", err)
+	}
+
 	db, err := redis.New(
 		redis.WithHost(user, pass, dbIndex, port),
 		redis.WithVersion(redisVersion),
 		redis.WithLogger(io.Discard),
 		redis.WithLabel(label),
+		redis.WithFixtures(fixturesPath),
 	)
 	if err != nil {
 		return err

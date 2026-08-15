@@ -23,22 +23,24 @@ func TestTemplateNameFollowsContentNotPaths(t *testing.T) {
 
 	// the api server writes every request's uploads into a fresh directory, the
 	// template has to stay the same anyway or migrations run on every request.
-	first, err := getFiles(writeFiles(t, files))
+	firstDir := writeFiles(t, files)
+	first, err := getFiles(firstDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	second, err := getFiles(writeFiles(t, files))
+	secondDir := writeFiles(t, files)
+	second, err := getFiles(secondDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	firstName, err := templateName(first)
+	firstName, err := templateName(firstDir, first)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	secondName, err := templateName(second)
+	secondName, err := templateName(secondDir, second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,18 +53,90 @@ func TestTemplateNameFollowsContentNotPaths(t *testing.T) {
 		t.Fatalf("template name is longer than a postgres identifier: %d", len(firstName))
 	}
 
-	changed, err := getFiles(writeFiles(t, map[string]string{"001_init.up.sql": "create table bar(id int);"}))
+	changedDir := writeFiles(t, map[string]string{"001_init.up.sql": "create table bar(id int);"})
+	changed, err := getFiles(changedDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	changedName, err := templateName(changed)
+	changedName, err := templateName(changedDir, changed)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if changedName == firstName {
 		t.Fatal("different migrations produced the same template name")
+	}
+}
+
+func TestGetFilesWalksSubdirectories(t *testing.T) {
+	dir := t.TempDir()
+	for name, content := range map[string]string{
+		"002_second.up.sql":        "select 2;",
+		"001_first.up.sql":         "select 1;",
+		"tenant/001_tenant.up.sql": "select 3;",
+		"tenant/README.md":         "not sql",
+	} {
+		full := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files, err := getFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+	for _, f := range files {
+		rel, err := filepath.Rel(dir, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, filepath.ToSlash(rel))
+	}
+
+	want := []string{"001_first.up.sql", "002_second.up.sql", "tenant/001_tenant.up.sql"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %v, got %v", want, got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, got)
+		}
+	}
+}
+
+// Two migrations sharing a base name in different directories must not collide.
+func TestTemplateNameUsesTheRelativePath(t *testing.T) {
+	build := func(dirName string) string {
+		root := t.TempDir()
+		full := filepath.Join(root, dirName, "001_init.up.sql")
+		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("select 1;"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		files, err := getFiles(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		name, err := templateName(root, files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return name
+	}
+
+	if build("tenant_a") == build("tenant_b") {
+		t.Fatal("migrations in different directories produced the same template name")
 	}
 }
 

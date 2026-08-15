@@ -43,6 +43,6 @@ func runTestingAPIServer(cmd *cobra.Command, args []string) error {
 		return apiserver.RunAPIServerContainer(utils.ContextWithOsSignal(), port, label, 20*time.Second)
 	}
 
-	server := apiserver.NewServer(port)
+	server := apiserver.NewServer(port, label)
 	return server.Start(utils.ContextWithOsSignal())
 }

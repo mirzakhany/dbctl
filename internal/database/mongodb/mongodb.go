@@ -18,6 +18,7 @@ import (
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
 	"github.com/mirzakhany/dbctl/internal/logger"
+	"github.com/mirzakhany/dbctl/internal/utils"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -136,7 +137,7 @@ func (m *MongoDB) RemoveDB(ctx context.Context, uri string) error {
 
 // Start starts a MongoDB database
 func (m *MongoDB) Start(ctx context.Context, detach bool) error {
-	logger.Info(fmt.Sprintf("Starting MongoDB version %s on port %d ...", m.cfg.version, m.cfg.port))
+	logger.Info(fmt.Sprintf("Starting MongoDB version %s ...", m.cfg.version))
 
 	closeFunc, err := m.startUsingDocker(ctx, 20*time.Second)
 	if err != nil {
@@ -241,6 +242,12 @@ func (m *MongoDB) startUsingDocker(ctx context.Context, timeout time.Duration) (
 		return nil, err
 	}
 
+	// port 0 asks for any free port, so that several projects can run their tests
+	// at the same time.
+	if m.cfg.port == 0 {
+		m.cfg.port = uint32(utils.GetAvailablePort())
+	}
+
 	port := strconv.Itoa(int(m.cfg.port))
 	req := container.CreateRequest{
 		Image: getMongoDBImage(m.cfg.version),
@@ -248,9 +255,13 @@ func (m *MongoDB) startUsingDocker(ctx context.Context, timeout time.Duration) (
 			"MONGO_INITDB_ROOT_USERNAME": m.cfg.user,
 			"MONGO_INITDB_ROOT_PASSWORD": m.cfg.pass,
 		},
-		ExposedPorts: []string{fmt.Sprintf("%s:27017/tcp", port)},
+		ExposedPorts: []string{container.PortSpec(port, "27017/tcp")},
 		Name:         fmt.Sprintf("dbctl_mongo_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: database.LabelMongoDB},
+	}
+
+	for k, v := range database.ConnectionLabels(m.cfg.user, m.cfg.pass, m.cfg.name, m.cfg.port) {
+		req.Labels[k] = v
 	}
 
 	if m.cfg.label != "" {
@@ -288,7 +299,7 @@ func (m *MongoDB) runUI(ctx context.Context) (database.CloseFunc, error) {
 			"ME_CONFIG_BASICAUTH_ENABLED": "false",
 			"ME_CONFIG_MONGODB_URL":       strings.ReplaceAll(m.URI(), "localhost", "host.docker.internal"),
 		},
-		ExposedPorts: []string{fmt.Sprintf("%s:8081", expressPort)},
+		ExposedPorts: []string{container.PortSpec(expressPort, "8081")},
 		Name:         fmt.Sprintf("dbctl_mongo_express_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: database.LabelMongoExpress},
 	})

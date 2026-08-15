@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mirzakhany/dbctl/internal/apiserver"
+	"github.com/mirzakhany/dbctl/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -45,15 +47,23 @@ func GetStartTestingCmd(rootCmd *cobra.Command) *cobra.Command {
 				}
 			}
 
+			apiPort, err := cobraCmd.Flags().GetString("api-port")
+			if err != nil {
+				return fmt.Errorf("invalid api-port args, %w", err)
+			}
+
 			// run api server
-			rootCmd.SetArgs([]string{"api-server", "-t"})
+			rootCmd.SetArgs([]string{"api-server", "-t", "-p", apiPort})
 			if err := rootCmd.Execute(); err != nil {
 				return fmt.Errorf("starting api server failed: %w", err)
 			}
 
+			logger.Info(fmt.Sprintf("Clients can reach it with DBCTL_PORT=%s", apiPort))
 			return nil
 		},
 	}
+
+	cmd.Flags().String("api-port", apiserver.DefaultPort, "port the api server listens on, pick another one to run several projects at once")
 
 	cmd.Flags().SetInterspersed(false)
 	return cmd

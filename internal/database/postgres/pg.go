@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mirzakhany/dbctl/internal/logger"
+	"github.com/mirzakhany/dbctl/internal/utils"
 
 	// golang postgres driver
 	_ "github.com/lib/pq"
@@ -138,7 +139,7 @@ func (p *Postgres) createDatabaseFromMigrations(ctx context.Context, conn *sql.D
 		return createDatabase(ctx, conn, dbName)
 	}
 
-	template, err := templateName(migrationFiles)
+	template, err := templateName(migrationsPath, migrationFiles)
 	if err != nil {
 		return err
 	}
@@ -251,7 +252,7 @@ func quoteIdentifier(name string) string {
 
 // Start starts a postgres database
 func (p *Postgres) Start(ctx context.Context, detach bool) error {
-	logger.Info(fmt.Sprintf("Starting postgres version %s on port %d ...", p.cfg.version, p.cfg.port))
+	logger.Info(fmt.Sprintf("Starting postgres version %s ...", p.cfg.version))
 
 	closeFunc, err := p.startUsingDocker(ctx, 20*time.Second)
 	if err != nil {
@@ -351,7 +352,7 @@ func (p *Postgres) runUI(ctx context.Context) (database.CloseFunc, error) {
 			// replace localhost with docker internal network
 			"PGWEB_DATABASE_URL": strings.ReplaceAll(p.URI(), "localhost", "host.docker.internal"),
 		},
-		ExposedPorts: []string{"8081:8081"},
+		ExposedPorts: []string{container.PortSpec("8081", "8081")},
 		Name:         fmt.Sprintf("dbctl_pgweb_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: database.LabelPGWeb},
 	})
@@ -395,6 +396,12 @@ func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) 
 		return nil, err
 	}
 
+	// port 0 asks for any free port, so that several projects can run their tests
+	// at the same time.
+	if p.cfg.port == 0 {
+		p.cfg.port = uint32(utils.GetAvailablePort())
+	}
+
 	port := strconv.Itoa(int(p.cfg.port))
 	req := container.CreateRequest{
 		Image: getPostGisImage(p.cfg.version),
@@ -404,9 +411,13 @@ func (p *Postgres) startUsingDocker(ctx context.Context, timeout time.Duration) 
 			"POSTGRES_DB":       p.cfg.name,
 		},
 		Cmd:          []string{"postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"},
-		ExposedPorts: []string{fmt.Sprintf("%s:5432/tcp", port)},
+		ExposedPorts: []string{container.PortSpec(port, "5432/tcp")},
 		Name:         fmt.Sprintf("dbctl_pg_%d_%d", time.Now().Unix(), rnd.Uint64()),
 		Labels:       map[string]string{container.LabelType: database.LabelPostgres},
+	}
+
+	for k, v := range database.ConnectionLabels(p.cfg.user, p.cfg.pass, p.cfg.name, p.cfg.port) {
+		req.Labels[k] = v
 	}
 
 	if p.cfg.label != "" {

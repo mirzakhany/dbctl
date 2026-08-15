@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"testing"
 )
@@ -79,6 +82,10 @@ func RemoveDB(dbType, uri string, opts ...Option) error {
 // one call never become the options of the next one.
 func configFrom(opts []Option) (*config, error) {
 	cfg := *defaultConfig
+	if err := cfg.fromEnv(); err != nil {
+		return nil, err
+	}
+
 	for _, opt := range opts {
 		if err := opt(&cfg); err != nil {
 			return nil, err
@@ -181,7 +188,7 @@ type Response interface {
 }
 
 func httpDoCreateDBRequest(r *CreateDBRequest, baseURL string) (*CreateDBResponse, error) {
-	url := baseURL + "/create"
+	endpoint := baseURL + "/create"
 
 	bodyBuf := &bytes.Buffer{}
 	bodyWriter := multipart.NewWriter(bodyBuf)
@@ -228,18 +235,24 @@ func httpDoCreateDBRequest(r *CreateDBRequest, baseURL string) (*CreateDBRespons
 		return nil, err
 	}
 
-	req, err := http.Post(url, contentType, bodyBuf)
+	req, err := http.NewRequest(http.MethodPost, endpoint, bodyBuf)
 	if err != nil {
 		return nil, err
 	}
-	defer req.Body.Close()
+	req.Header.Set("Content-Type", contentType)
 
-	if err := checkForError(req); err != nil {
+	rawRes, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer rawRes.Body.Close()
+
+	if err := checkForError(rawRes); err != nil {
 		return nil, err
 	}
 
 	var res CreateDBResponse
-	if err := json.NewDecoder(req.Body).Decode(&res); err != nil {
+	if err := json.NewDecoder(rawRes.Body).Decode(&res); err != nil {
 		return nil, err
 	}
 
@@ -256,6 +269,7 @@ func httpDoRemoveDBRequest(r *RemoveDBRequest, baseURL string) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	rawRes, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -266,13 +280,16 @@ func httpDoRemoveDBRequest(r *RemoveDBRequest, baseURL string) error {
 	return checkForError(rawRes)
 }
 
-func addFileToWriter(w *multipart.Writer, fieldname, filename string) error {
-	fileWriter, err := w.CreateFormFile(fieldname, filepath.Base(filename))
+func addFileToWriter(w *multipart.Writer, fieldname string, file uploadFile) error {
+	// multipart parsing reduces a name to its last element, so the path relative to
+	// the migrations directory is escaped to survive the trip and files in
+	// subdirectories keep both their place and their order.
+	fileWriter, err := w.CreateFormFile(fieldname, url.PathEscape(filepath.ToSlash(file.rel)))
 	if err != nil {
 		return err
 	}
 
-	f, err := os.Open(filename)
+	f, err := os.Open(file.path)
 	if err != nil {
 		return err
 	}
@@ -281,7 +298,7 @@ func addFileToWriter(w *multipart.Writer, fieldname, filename string) error {
 	}()
 
 	if _, err := io.Copy(fileWriter, f); err != nil {
-		return fmt.Errorf("read file (%s) failed: %w", filename, err)
+		return fmt.Errorf("read file (%s) failed: %w", file.path, err)
 	}
 
 	return nil
@@ -300,19 +317,26 @@ func checkForError(r *http.Response) error {
 	return errors.New(msg.Error)
 }
 
-// getFilesList returns a list of files in a directory
-func getFilesList(dir string, regexPattern string) ([]string, error) {
+// uploadFile is a file to send, together with its path relative to the directory
+// it was found in.
+type uploadFile struct {
+	rel  string
+	path string
+}
+
+// getFilesList returns the files in a directory and its subdirectories. The regex,
+// when given, is matched against the path relative to that directory.
+func getFilesList(dir string, regexPattern string) ([]uploadFile, error) {
 	if dir == "" {
 		return nil, nil
 	}
 
-	files, err := os.ReadDir(dir)
+	absPath, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	absPath, err := filepath.Abs(dir)
-	if err != nil {
+	if _, err := os.Stat(absPath); err != nil {
 		return nil, err
 	}
 
@@ -324,16 +348,32 @@ func getFilesList(dir string, regexPattern string) ([]string, error) {
 		}
 	}
 
-	var out []string
-	for _, f := range files {
-		if f.IsDir() {
-			continue
+	var out []uploadFile
+	err = filepath.WalkDir(absPath, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-		fullPath := filepath.Join(absPath, f.Name())
-		if regex == nil || regex.MatchString(f.Name()) {
-			out = append(out, fullPath)
+		if d.IsDir() {
+			return nil
 		}
+
+		rel, err := filepath.Rel(absPath, p)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+
+		if regex != nil && !regex.MatchString(rel) {
+			return nil
+		}
+
+		out = append(out, uploadFile{rel: rel, path: p})
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
+	sort.Slice(out, func(i, j int) bool { return out[i].rel < out[j].rel })
 	return out, nil
 }

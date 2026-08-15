@@ -9,12 +9,14 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
 	"github.com/mirzakhany/dbctl/internal/database/mongodb"
 	pg "github.com/mirzakhany/dbctl/internal/database/postgres"
@@ -26,14 +28,45 @@ import (
 // DefaultPort is the default port for the testing server
 const DefaultPort = "1988"
 
+const (
+	// EnvLabel holds the label the server scopes its instance lookups to
+	EnvLabel = "DBCTL_LABEL"
+	// EnvInstances holds the instances discovered when the server was started, used
+	// when the server itself cannot reach docker
+	EnvInstances = "DBCTL_INSTANCES"
+)
+
 // Server is the testing server
 type Server struct {
-	port string
+	port  string
+	label string
+
+	// instances discovered when the server started, by database type
+	instances map[string]*database.Instance
 }
 
-// NewServer creates a new testing server
-func NewServer(port string) *Server {
-	return &Server{port: port}
+// NewServer creates a new testing server. The label scopes which instances the
+// server manages.
+func NewServer(port, label string) *Server {
+	// the containerized server is configured through the environment
+	if label == "" {
+		label = os.Getenv(EnvLabel)
+	}
+
+	s := &Server{port: port, label: label}
+
+	// the containerized server has no access to docker, it is told about the
+	// instances that were running when it was started instead.
+	if raw := os.Getenv(EnvInstances); raw != "" {
+		instances := map[string]*database.Instance{}
+		if err := json.Unmarshal([]byte(raw), &instances); err != nil {
+			logger.Error("ignoring unreadable "+EnvInstances, err)
+		} else {
+			s.instances = instances
+		}
+	}
+
+	return s
 }
 
 // Start starts the testing server
@@ -43,9 +76,10 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.Handle("/create", http.HandlerFunc(s.CreateDB))
 	mux.Handle("/remove", http.HandlerFunc(s.RemoveDB))
 
-	// Inside the container the server has to be reachable from the host, everywhere
-	// else it manages databases with no authentication and stays on loopback.
-	host := "127.0.0.1"
+	// The server creates and drops databases for whoever reaches it, so it stays on
+	// loopback. In a container it has to listen on every interface to be reachable
+	// at all, its published port is what keeps it local.
+	host := container.LoopbackAddress
 	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
 		host = ""
 	}
@@ -168,6 +202,10 @@ func (s *Server) CreateDB(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Fixtures = fixturesDir
 
+	// anything the caller left out is taken from the running instance, so that a
+	// client does not have to be told which port dbctl picked.
+	s.applyInstance(r.Context(), req)
+
 	var uri string
 	var createErr error
 
@@ -188,6 +226,45 @@ func (s *Server) CreateDB(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, CreateDBResponse{URI: uri})
 }
 
+// instanceFor returns the running instance of a type, so that a client does not
+// have to know which port it was started on. Discovery through docker is used when
+// the server can reach it, otherwise the snapshot taken at start up.
+func (s *Server) instanceFor(ctx context.Context, dbType string) *database.Instance {
+	if instance, ok := s.instances[dbType]; ok {
+		return instance
+	}
+
+	instance, err := database.FindInstance(ctx, dbType, s.label)
+	if err != nil {
+		logger.Debug(fmt.Sprintf("no %s instance found, falling back to the defaults: %v", dbType, err))
+		return nil
+	}
+
+	return instance
+}
+
+// applyInstance fills in the connection details the caller did not send from the
+// running instance.
+func (s *Server) applyInstance(ctx context.Context, r *CreateDBRequest) {
+	instance := s.instanceFor(ctx, r.Type)
+	if instance == nil {
+		return
+	}
+
+	if r.InstancePort == 0 {
+		r.InstancePort = instance.Port
+	}
+	if r.InstanceUser == "" {
+		r.InstanceUser = instance.User
+	}
+	if r.InstancePass == "" {
+		r.InstancePass = instance.Pass
+	}
+	if r.InstanceName == "" {
+		r.InstanceName = instance.Name
+	}
+}
+
 // validateType reports whether the api server knows how to create the given
 // database type.
 func validateType(dbType string) error {
@@ -197,6 +274,29 @@ func validateType(dbType string) error {
 
 	return fmt.Errorf("type %q is not valid, valid options are %s, %s or %s",
 		dbType, database.TypePostgres, database.TypeRedis, database.TypeMongoDB)
+}
+
+// uploadPath turns the name of an uploaded part into a path relative to the
+// directory the request is unpacked into. Clients percent encode the separators so
+// that a migration living in a subdirectory survives multipart parsing, which
+// otherwise reduces every name to its last element.
+func uploadPath(filename string) (string, error) {
+	name := filename
+	if decoded, err := url.PathUnescape(filename); err == nil {
+		name = decoded
+	}
+
+	name = filepath.Clean(filepath.FromSlash(name))
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "", fmt.Errorf("invalid file name %q", filename)
+	}
+
+	// never let an upload write outside the directory it belongs to
+	if filepath.IsAbs(name) || strings.HasPrefix(name, "..") {
+		return "", fmt.Errorf("file name %q is outside the upload directory", filename)
+	}
+
+	return name, nil
 }
 
 // isTrue reports whether a form value is a truthy flag.
@@ -221,11 +321,9 @@ func readMulipartFiles(r *http.Request, key, dst string) error {
 }
 
 func writeMultipartFile(f *multipart.FileHeader, dst string) error {
-	// FileHeader.Filename is already sanitized to its base name, guard anyway so
-	// a crafted request can not escape the destination directory.
-	name := filepath.Base(filepath.Clean(f.Filename))
-	if name == "." || name == string(filepath.Separator) {
-		return fmt.Errorf("invalid file name %q", f.Filename)
+	name, err := uploadPath(f.Filename)
+	if err != nil {
+		return err
 	}
 
 	src, err := f.Open()
@@ -236,7 +334,12 @@ func writeMultipartFile(f *multipart.FileHeader, dst string) error {
 		_ = src.Close()
 	}()
 
-	out, err := os.Create(filepath.Join(dst, name))
+	target := filepath.Join(dst, name)
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+		return err
+	}
+
+	out, err := os.Create(target)
 	if err != nil {
 		return err
 	}
@@ -279,13 +382,18 @@ func (s *Server) RemoveDB(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validateType(req.Type); err != nil {
+		JSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	var err error
 	switch req.Type {
-	case "postgres":
+	case database.TypePostgres:
 		err = removePostgresDB(r.Context(), req)
-	case "redis":
+	case database.TypeRedis:
 		err = removeRedisDB(r.Context(), req)
-	case "mongodb":
+	case database.TypeMongoDB:
 		err = removeMongoDBDB(r.Context(), req)
 	}
 
@@ -345,13 +453,12 @@ func createRedisDB(ctx context.Context, r *CreateDBRequest) (string, error) {
 		r.InstancePass = rs.DefaultPass
 	}
 
-	// TODO handle redis fixtures
 	rsDB, err := rs.New(rs.WithHost(r.InstanceUser, r.InstancePass, 0, r.InstancePort))
 	if err != nil {
 		return "", err
 	}
 
-	res, err := rsDB.CreateDB(ctx, &database.CreateDBRequest{})
+	res, err := rsDB.CreateDB(ctx, &database.CreateDBRequest{Fixtures: r.Fixtures})
 	if err != nil {
 		return "", err
 	}

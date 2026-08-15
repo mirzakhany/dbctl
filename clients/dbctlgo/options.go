@@ -3,6 +3,8 @@ package dbctlgo
 import (
 	"fmt"
 	"net"
+	"os"
+	"strconv"
 )
 
 // config is the client configuration.
@@ -26,12 +28,38 @@ type config struct {
 	hostPort    uint32
 }
 
+// Environment variables read when no option overrides them, so that a project can
+// point its tests at its own dbctl server without touching the test code.
+const (
+	// EnvHost is the address of the dbctl api server
+	EnvHost = "DBCTL_HOST"
+	// EnvPort is the port of the dbctl api server
+	EnvPort = "DBCTL_PORT"
+)
+
 // The instance details are left empty on purpose: the server knows the defaults of
 // each database type and fills in the missing ones. Sending the postgres defaults
 // for every type would make dbctl try to log into redis as "postgres".
 var defaultConfig = &config{
 	hostAddress: "localhost",
 	hostPort:    1988,
+}
+
+// fromEnv applies the environment to a config, before any explicit option.
+func (c *config) fromEnv() error {
+	if host := os.Getenv(EnvHost); host != "" {
+		c.hostAddress = host
+	}
+
+	if port := os.Getenv(EnvPort); port != "" {
+		p, err := strconv.ParseUint(port, 10, 32)
+		if err != nil {
+			return fmt.Errorf("%s is not a valid port number: %q", EnvPort, port)
+		}
+		c.hostPort = uint32(p)
+	}
+
+	return nil
 }
 
 // Option is a function that configures the client.
