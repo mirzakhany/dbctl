@@ -216,8 +216,10 @@ func (m *MongoDB) WaitForStart(ctx context.Context, timeout time.Duration) error
 }
 
 // Instances returns a list of MongoDB instances
-func Instances(ctx context.Context) ([]database.Info, error) {
-	l, err := container.List(ctx, map[string]string{container.LabelType: database.LabelMongoDB})
+// Instances returns the running MongoDB instances, restricted to the given label
+// when one is provided.
+func Instances(ctx context.Context, label string) ([]database.Info, error) {
+	l, err := container.List(ctx, database.InstanceLabels(database.LabelMongoDB, label))
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +322,14 @@ func (m *MongoDB) URI() string {
 
 // Helper function to connect to MongoDB
 func (m *MongoDB) connect(ctx context.Context) (*mongo.Client, error) {
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(m.URI()))
+	// without a shorter selection timeout an unreachable instance keeps the
+	// caller waiting for 30 seconds before reporting the obvious.
+	opts := options.Client().
+		ApplyURI(m.URI()).
+		SetServerSelectionTimeout(10 * time.Second).
+		SetConnectTimeout(10 * time.Second)
+
+	client, err := mongo.Connect(ctx, opts)
 	if err != nil {
 		return nil, err
 	}

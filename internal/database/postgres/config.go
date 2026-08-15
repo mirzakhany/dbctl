@@ -2,11 +2,14 @@ package pg
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -68,12 +71,47 @@ func WithHost(user, pass, name string, port uint32) Option {
 	}
 }
 
+// WithURI applies the instance connection details found in a database uri to config.
+// The database name is deliberately left untouched: administrative statements have to
+// run against the maintenance database, not against the one being created or dropped.
+func WithURI(uri string) Option {
+	return func(c *config) error {
+		if uri == "" {
+			return nil
+		}
+
+		u, err := url.Parse(uri)
+		if err != nil {
+			return fmt.Errorf("parse database uri failed: %w", err)
+		}
+
+		if u.User != nil {
+			if name := u.User.Username(); name != "" {
+				c.user = name
+			}
+			if pass, ok := u.User.Password(); ok {
+				c.pass = pass
+			}
+		}
+
+		if p := u.Port(); p != "" {
+			port, err := strconv.ParseUint(p, 10, 32)
+			if err != nil {
+				return fmt.Errorf("invalid port in database uri %q: %w", uri, err)
+			}
+			c.port = uint32(port)
+		}
+
+		return nil
+	}
+}
+
 // WithVersion applied selected postgres version to config
 func WithVersion(version string) Option {
 	vv := strings.TrimSpace(version)
 	return func(c *config) error {
 		if vv == "" {
-			c.version = "13-3.1"
+			c.version = DefaultVersion
 			return nil
 		}
 		versions := getVersions()
@@ -111,16 +149,22 @@ func WithMigrations(path string) Option {
 			return fmt.Errorf("read migraions failed: %w", err)
 		}
 
-		for _, f := range files {
-			// ignore migration down files
-			if strings.HasSuffix(f, "down.sql") {
-				continue
-			}
-			c.migrationsFiles = append(c.migrationsFiles, f)
-		}
-
+		c.migrationsFiles = append(c.migrationsFiles, MigrationFiles(files)...)
 		return nil
 	}
+}
+
+// MigrationFiles drops the down migrations from a list of migration files. Applying
+// them alongside the up migrations would undo the schema that was just created.
+func MigrationFiles(files []string) []string {
+	out := make([]string, 0, len(files))
+	for _, f := range files {
+		if strings.HasSuffix(strings.ToLower(f), "down.sql") {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // WithFixtures applied selected fixtures to config
@@ -165,11 +209,38 @@ func getFiles(path string) ([]string, error) {
 		return nil, err
 	}
 	for _, f := range files {
+		// only sql files are applied, a directory can hold a readme or a
+		// checked in .gitkeep next to the migrations.
+		if f.IsDir() || !strings.EqualFold(filepath.Ext(f.Name()), ".sql") {
+			continue
+		}
 		out = append(out, filepath.Join(absPath, f.Name()))
 	}
 
 	sort.Strings(out)
 	return out, nil
+}
+
+// templateName derives a postgres identifier from the content of the given files.
+// Hashing the content rather than the paths is what makes the template reusable:
+// the api server writes every request's uploads into a fresh temporary directory,
+// so paths differ on every call while the migrations themselves do not.
+func templateName(files []string) (string, error) {
+	h := sha256.New()
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return "", fmt.Errorf("read migration file (%s) failed: %w", f, err)
+		}
+
+		// include the name so that renaming or reordering migrations yields a
+		// different template.
+		h.Write([]byte(filepath.Base(f)))
+		h.Write(b)
+	}
+
+	// postgres truncates identifiers at 63 bytes, keep well below that.
+	return "dbctl_tpl_" + hex.EncodeToString(h.Sum(nil))[:32], nil
 }
 
 func getPostGisImage(version string) string {
@@ -178,13 +249,4 @@ func getPostGisImage(version string) string {
 	}
 	// fallback to odidev/postgis:13-3.1
 	return "odidev/postgis:13-3.1-alpine"
-}
-
-// get hash generate a hash from list of strings
-func getHash(list []string) string {
-	sort.Strings(list)
-	xx := fmt.Sprintf("%x", list)
-	// create md5 hash of xx
-	cc := sha256.Sum256([]byte(xx))
-	return string(cc[:])
 }

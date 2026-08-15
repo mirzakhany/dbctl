@@ -3,9 +3,11 @@ package mongodb
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -58,6 +60,41 @@ func WithHost(user, pass, name string, port uint32) Option {
 		c.pass = pass
 		c.name = name
 		c.port = port
+		return nil
+	}
+}
+
+// WithURI applies the instance connection details found in a database uri to config.
+// The database name is deliberately left untouched: administrative commands have to run
+// against the maintenance database, not against the one being created or dropped.
+func WithURI(uri string) Option {
+	return func(c *config) error {
+		if uri == "" {
+			return nil
+		}
+
+		u, err := url.Parse(uri)
+		if err != nil {
+			return fmt.Errorf("parse database uri failed: %w", err)
+		}
+
+		if u.User != nil {
+			if name := u.User.Username(); name != "" {
+				c.user = name
+			}
+			if pass, ok := u.User.Password(); ok {
+				c.pass = pass
+			}
+		}
+
+		if p := u.Port(); p != "" {
+			port, err := strconv.ParseUint(p, 10, 32)
+			if err != nil {
+				return fmt.Errorf("invalid port in database uri %q: %w", uri, err)
+			}
+			c.port = uint32(port)
+		}
+
 		return nil
 	}
 }

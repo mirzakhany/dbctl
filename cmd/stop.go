@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/mirzakhany/dbctl/internal/container"
 	"github.com/mirzakhany/dbctl/internal/database"
@@ -19,21 +20,32 @@ func GetStopCmd() *cobra.Command {
 		Use:   "stop {rs pg mdb id all <label>}",
 		Short: "stop one or more detached databases",
 		Long: `using this command you can stop one or more detached databases by their type, id or label
-		for example: dbctl stop pg rs or dbctl stop 969ec9747052`,
+		for example: dbctl stop pg rs or dbctl stop 969ec9747052
+
+stopping by type acts on every dbctl instance of that type, pass --label to limit it
+to the instances started with that label. stopping by label stops everything started
+with it, the api server included.`,
 		RunE: runStop,
 	}
 	return cmd
 }
 
-func runStop(_ *cobra.Command, args []string) error {
+func runStop(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return errors.New("invalid args, can be postgres(pg) and/or redis(rs) or instance id")
+	}
+
+	// stopping by type only affects the instances carrying the given label, so a
+	// project can shut its own databases down without touching anyone else's.
+	label, err := cmd.Flags().GetString("label")
+	if err != nil {
+		return fmt.Errorf("invalid label args, %w", err)
 	}
 
 	ctx := utils.ContextWithOsSignal()
 
 	if utils.Contain(args, "pg", "postgres") {
-		items, err := pg.Instances(ctx)
+		items, err := pg.Instances(ctx, label)
 		if err != nil {
 			return err
 		}
@@ -44,7 +56,7 @@ func runStop(_ *cobra.Command, args []string) error {
 	}
 
 	if utils.Contain(args, "rs", "redis") {
-		items, err := redis.Instances(ctx)
+		items, err := redis.Instances(ctx, label)
 		if err != nil {
 			return err
 		}
@@ -55,7 +67,7 @@ func runStop(_ *cobra.Command, args []string) error {
 	}
 
 	if utils.Contain(args, "mdb", "mongodb") {
-		items, err := mongodb.Instances(ctx)
+		items, err := mongodb.Instances(ctx, label)
 		if err != nil {
 			return err
 		}

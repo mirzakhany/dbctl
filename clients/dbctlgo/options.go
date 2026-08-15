@@ -26,12 +26,10 @@ type config struct {
 	hostPort    uint32
 }
 
+// The instance details are left empty on purpose: the server knows the defaults of
+// each database type and fills in the missing ones. Sending the postgres defaults
+// for every type would make dbctl try to log into redis as "postgres".
 var defaultConfig = &config{
-	instancePass:   "postgres",
-	instancePort:   15432,
-	instanceUser:   "postgres",
-	instanceDBName: "postgres",
-
 	hostAddress: "localhost",
 	hostPort:    1988,
 }
@@ -64,7 +62,9 @@ func WithFixtures(fixtures string) Option {
 }
 
 // WithInstance configures the client to use the given postgres instance.
-func WithInstance(user, pass, address, dbname string, port uint32) Option {
+// The address is accepted for backwards compatibility and ignored: the dbctl
+// server always reaches the instances running next to it.
+func WithInstance(user, pass, address, dbname string, port uint32) Option { //nolint:revive
 	return func(cfg *config) error {
 		cfg.instanceUser = user
 		cfg.instancePass = pass

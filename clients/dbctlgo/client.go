@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"testing"
 )
 
@@ -54,8 +54,11 @@ func MustCreateDB(t *testing.T, dbType string, opts ...Option) string {
 	}
 
 	t.Cleanup(func() {
-		if err := RemoveDB(dbType, uri); err != nil {
-			t.Fatalf("failed to remove %s database: %v", dbType, err)
+		// the same options have to be used here, the database was created through
+		// the server they point at.
+		// report, do not abort: the remaining cleanup functions still have to run
+		if err := RemoveDB(dbType, uri, opts...); err != nil {
+			t.Errorf("failed to remove %s database: %v", dbType, err)
 		}
 	})
 
@@ -63,8 +66,25 @@ func MustCreateDB(t *testing.T, dbType string, opts ...Option) string {
 }
 
 // RemoveDB remove a database using connection string
-func RemoveDB(dbType, uri string) error {
-	return httpDoRemoveDBRequest(&RemoveDBRequest{Type: dbType, URI: uri}, defaultConfig.getHostURL())
+func RemoveDB(dbType, uri string, opts ...Option) error {
+	cfg, err := configFrom(opts)
+	if err != nil {
+		return err
+	}
+
+	return httpDoRemoveDBRequest(&RemoveDBRequest{Type: dbType, URI: uri}, cfg.getHostURL())
+}
+
+// configFrom applies the options to a copy of the defaults, so that the options of
+// one call never become the options of the next one.
+func configFrom(opts []Option) (*config, error) {
+	cfg := *defaultConfig
+	for _, opt := range opts {
+		if err := opt(&cfg); err != nil {
+			return nil, err
+		}
+	}
+	return &cfg, nil
 }
 
 // CreateDB create a database and return connection string
@@ -74,11 +94,9 @@ func CreateDB(dbType string, opts ...Option) (string, error) {
 		return "", ErrInvalidDatabaseType
 	}
 
-	var cfg = defaultConfig
-	for _, opt := range opts {
-		if err := opt(cfg); err != nil {
-			return "", err
-		}
+	cfg, err := configFrom(opts)
+	if err != nil {
+		return "", err
 	}
 
 	var migrationsPath, fixturesPath string
@@ -99,20 +117,20 @@ func CreateDB(dbType string, opts ...Option) (string, error) {
 	}
 
 	req := &CreateDBRequest{
-		Type:            dbType,
-		Migrations:      migrationsPath,
-		MigrationsRegex: cfg.migrationsFileRegex,
-		Fixtures:        fixturesPath,
-		InstanceName:    cfg.instanceDBName,
-		InstancePass:    cfg.instancePass,
-		InstancePort:    cfg.instancePort,
-		InstanceUser:    cfg.instanceUser,
+		Type:                  dbType,
+		Migrations:            migrationsPath,
+		MigrationsRegex:       cfg.migrationsFileRegex,
+		Fixtures:              fixturesPath,
+		WithDefaultMigrations: cfg.withDefaultMigrations,
+		InstanceName:          cfg.instanceDBName,
+		InstancePass:          cfg.instancePass,
+		InstancePort:          cfg.instancePort,
+		InstanceUser:          cfg.instanceUser,
 	}
 
 	res, err := httpDoCreateDBRequest(req, cfg.getHostURL())
 	if err != nil {
-		log.Println("httpDoCreateDBRequest failed:", err)
-		return "", err
+		return "", fmt.Errorf("create %s database failed: %w", dbType, err)
 	}
 
 	return res.URI, nil
@@ -129,6 +147,10 @@ type CreateDBRequest struct {
 	Migrations      string `json:"migrations"`
 	MigrationsRegex string `json:"migrations_regex,omitempty"` // optional regex to filter migration files
 	Fixtures        string `json:"fixtures"`
+
+	// WithDefaultMigrations reuses the migrations the instance was started with
+	// instead of uploading them with every request.
+	WithDefaultMigrations bool `json:"with_default_migrations"`
 
 	// postgres instance information
 	InstancePort uint32 `json:"instance_port"`
@@ -166,22 +188,21 @@ func httpDoCreateDBRequest(r *CreateDBRequest, baseURL string) (*CreateDBRespons
 
 	migrationFiles, err := getFilesList(r.Migrations, r.MigrationsRegex)
 	if err != nil {
-		log.Println("getFilesList migraions failed:", err)
-		return nil, err
+		return nil, fmt.Errorf("read migrations failed: %w", err)
 	}
 
 	fixtureFiles, err := getFilesList(r.Fixtures, "")
 	if err != nil {
-		log.Println("getFilesList fixtures failed:", err)
-		return nil, err
+		return nil, fmt.Errorf("read fixtures failed: %w", err)
 	}
 
 	kv := map[string]string{
-		"type":          r.Type,
-		"instance_port": fmt.Sprintf("%d", r.InstancePort),
-		"instance_user": r.InstanceUser,
-		"instance_pass": r.InstancePass,
-		"instance_name": r.InstanceName,
+		"type":                    r.Type,
+		"instance_port":           fmt.Sprintf("%d", r.InstancePort),
+		"instance_user":           r.InstanceUser,
+		"instance_pass":           r.InstancePass,
+		"instance_name":           r.InstanceName,
+		"with_default_migrations": strconv.FormatBool(r.WithDefaultMigrations),
 	}
 
 	for _, f := range migrationFiles {
@@ -246,7 +267,7 @@ func httpDoRemoveDBRequest(r *RemoveDBRequest, baseURL string) error {
 }
 
 func addFileToWriter(w *multipart.Writer, fieldname, filename string) error {
-	fileWriter, err := w.CreateFormFile(fieldname, filename)
+	fileWriter, err := w.CreateFormFile(fieldname, filepath.Base(filename))
 	if err != nil {
 		return err
 	}
@@ -255,23 +276,28 @@ func addFileToWriter(w *multipart.Writer, fieldname, filename string) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		_ = f.Close()
+	}()
 
 	if _, err := io.Copy(fileWriter, f); err != nil {
-		return err
+		return fmt.Errorf("read file (%s) failed: %w", filename, err)
 	}
 
 	return nil
 }
 
 func checkForError(r *http.Response) error {
-	if r.StatusCode >= 400 {
-		var err ErrorMessage
-		if err := json.NewDecoder(r.Body).Decode(&err); err != nil {
-			return err
-		}
-		return errors.New(err.Error)
+	if r.StatusCode < 400 {
+		return nil
 	}
-	return nil
+
+	var msg ErrorMessage
+	if err := json.NewDecoder(r.Body).Decode(&msg); err != nil || msg.Error == "" {
+		return fmt.Errorf("dbctl server returned %s", r.Status)
+	}
+
+	return errors.New(msg.Error)
 }
 
 // getFilesList returns a list of files in a directory

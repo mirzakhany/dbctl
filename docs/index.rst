@@ -67,6 +67,7 @@ Instructions
 
    testing/overview.md
    testing/golang.md
+   testing/python.md
 
 .. toctree::
    :maxdepth: 2

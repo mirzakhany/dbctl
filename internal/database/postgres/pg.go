@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/mirzakhany/dbctl/internal/logger"
-	"github.com/mirzakhany/dbctl/internal/utils"
 
 	// golang postgres driver
 	_ "github.com/lib/pq"
@@ -41,6 +40,8 @@ const (
 	DefaultName = "postgres"
 	// DefaultTemplate is the default template name for postgres when creating a new database with migtations and fixtures
 	DefaultTemplate = "dbctl_template"
+	// DefaultVersion is the postgres version started when none is requested
+	DefaultVersion = "14.3.2"
 )
 
 // Postgres is a postgres database instance
@@ -57,7 +58,7 @@ func New(options ...Option) (*Postgres, error) {
 		user:    DefaultUser,
 		name:    DefaultName,
 		port:    DefaultPort,
-		version: "14.3.0",
+		version: DefaultVersion,
 	}}
 
 	for _, o := range options {
@@ -82,83 +83,102 @@ func (p *Postgres) CreateDB(ctx context.Context, req *database.CreateDBRequest) 
 
 	// create a random name for new database
 	dbName := fmt.Sprintf("dbctl_%d", time.Now().UnixNano())
-	newDB, _ := New(WithHost(p.cfg.user, p.cfg.pass, dbName, p.cfg.port))
+	newDB, err := New(WithHost(p.cfg.user, p.cfg.pass, dbName, p.cfg.port))
+	if err != nil {
+		return nil, err
+	}
 	newURI := newDB.URI()
 
-	if req.WithDefaultMigrations {
-		if err = p.createDatabaseWithTemplate(ctx, conn, dbName, DefaultTemplate); err != nil {
+	switch {
+	case req.WithDefaultMigrations:
+		if err := p.createDatabaseWithTemplate(ctx, conn, dbName, DefaultTemplate); err != nil {
 			if errors.Is(err, errDatabaseNotExists) {
-				return nil, fmt.Errorf("default database not found, please create it first: %w", err)
+				return nil, fmt.Errorf("default template database %q not found, start the instance with migrations first: %w", DefaultTemplate, err)
 			}
+			return nil, err
 		}
 
-		// run apply fixtures if exist
-		if len(req.Fixtures) != 0 {
-			if err := applyFixturesFromDir(ctx, conn, req.Fixtures, newURI); err != nil {
-				return nil, err
-			}
-		}
-
-		//retun new database uri
-		return &database.CreateDBResponse{URI: newURI}, nil
-	}
-
-	// if no migrations provided, just create a new database
-	if len(req.Migrations) == 0 {
+	case len(req.Migrations) == 0:
 		logger.Debug("No migrations provided, creating a new database ...")
 		if err := createDatabase(ctx, conn, dbName); err != nil {
 			return nil, err
 		}
-		return &database.CreateDBResponse{URI: newURI}, nil
-	}
 
-	logger.Debug("Creating a new database with migrations ...")
-	// if migrations provided, create a template database and create a new database from template
-	// new a new database with provided migrations and fixtures
-	// run migrations if exist
-	migrationFiles, err := getFiles(req.Migrations)
-	if err != nil {
-		return nil, fmt.Errorf("read migraions failed: %w", err)
-	}
-	templateName := utils.GetListHash(migrationFiles)
-	logger.Debug("template name is:", templateName)
-
-	// try to create database using template
-	err = p.createDatabaseWithTemplate(ctx, conn, dbName, templateName)
-	if err != nil && !errors.Is(err, errDatabaseNotExists) {
-		logger.Debug("create database with template failed, trying to create a new database ...")
-		return nil, err
-	}
-
-	if errors.Is(err, errDatabaseNotExists) {
-		logger.Debug("template database not found, creating a new database ...")
-		// create database if not exist
-		if err := createDatabase(ctx, conn, dbName); err != nil {
+	default:
+		if err := p.createDatabaseFromMigrations(ctx, conn, dbName, newURI, req.Migrations); err != nil {
 			return nil, err
 		}
-
-		logger.Debug("template database found, creating a new database from template ...")
-		// connect to new database and run migrations
-		if err := RunMigrations(ctx, nil, migrationFiles, newURI); err != nil {
-			return nil, err
-		}
-
-		// create a template from new database
-		_ = p.createDatabaseWithTemplate(ctx, conn, templateName, dbName)
 	}
 
+	// fixtures always go to the database that was just created, never to the
+	// maintenance connection this method holds.
 	if len(req.Fixtures) != 0 {
 		if err := applyFixturesFromDir(ctx, nil, req.Fixtures, newURI); err != nil {
 			return nil, err
 		}
 	}
 
-	// make sure we retrun localhost instead of host.docker.internal
-	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
-		newURI = strings.ReplaceAll(newURI, "host.docker.internal", "localhost")
+	return &database.CreateDBResponse{URI: hostURI(newURI)}, nil
+}
+
+// createDatabaseFromMigrations creates dbName from a template holding the given
+// migrations, building that template first if this is the first time these
+// migrations are seen.
+func (p *Postgres) createDatabaseFromMigrations(ctx context.Context, conn *sql.DB, dbName, dbURI, migrationsPath string) error {
+	logger.Debug("Creating a new database with migrations ...")
+
+	files, err := getFiles(migrationsPath)
+	if err != nil {
+		return fmt.Errorf("read migraions failed: %w", err)
 	}
 
-	return &database.CreateDBResponse{URI: newURI}, nil
+	migrationFiles := MigrationFiles(files)
+	if len(migrationFiles) == 0 {
+		logger.Debug("No migration files found, creating a new database ...")
+		return createDatabase(ctx, conn, dbName)
+	}
+
+	template, err := templateName(migrationFiles)
+	if err != nil {
+		return err
+	}
+	logger.Debug("template name is:", template)
+
+	// try to create the database from the template built by an earlier request
+	err = p.createDatabaseWithTemplate(ctx, conn, dbName, template)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, errDatabaseNotExists) {
+		return err
+	}
+
+	logger.Debug("template database not found, creating a new database ...")
+	if err := createDatabase(ctx, conn, dbName); err != nil {
+		return err
+	}
+
+	// connect to new database and run migrations
+	if err := RunMigrations(ctx, nil, migrationFiles, dbURI); err != nil {
+		return err
+	}
+
+	// snapshot it as the template for the next request. a concurrent request may
+	// have created it in the meantime, which is harmless.
+	if err := p.createDatabaseWithTemplate(ctx, conn, template, dbName); err != nil {
+		logger.Debug("creating template database failed, migrations will run again next time:", err)
+	}
+
+	return nil
+}
+
+// hostURI rewrites a uri so that it is usable by the caller. The api server reaches
+// the databases through host.docker.internal, its clients run outside docker.
+func hostURI(uri string) string {
+	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
+		return strings.ReplaceAll(uri, "host.docker.internal", "localhost")
+	}
+	return uri
 }
 
 func (p *Postgres) createDatabaseWithTemplate(ctx context.Context, conn *sql.DB, name, template string) error {
@@ -174,7 +194,8 @@ func (p *Postgres) createDatabaseWithTemplate(ctx context.Context, conn *sql.DB,
 	}
 
 	// if default is exist, use it as template and create new database
-	if _, err := conn.Exec(fmt.Sprintf("create database %q with template %q", name, template)); err != nil {
+	if _, err := conn.Exec(fmt.Sprintf("create database %s with template %s",
+		quoteIdentifier(name), quoteIdentifier(template))); err != nil {
 		// is error database not exist?
 		if strings.Contains(err.Error(), "does not exist") {
 			return errDatabaseNotExists
@@ -194,6 +215,9 @@ func (p *Postgres) RemoveDB(ctx context.Context, uri string) error {
 
 	// get database name
 	dbName := strings.TrimPrefix(u.Path, "/")
+	if dbName == "" {
+		return fmt.Errorf("uri %q does not contain a database name", uri)
+	}
 
 	conn, err := dbConnect(ctx, p.URI())
 	if err != nil {
@@ -203,13 +227,26 @@ func (p *Postgres) RemoveDB(ctx context.Context, uri string) error {
 		_ = conn.Close()
 	}()
 
-	// terminate connection
-	_, _ = conn.ExecContext(ctx, fmt.Sprintf("select pg_terminate_backend(pid) from pg_stat_activity where datname = %s", dbName))
-	if _, err := conn.ExecContext(ctx, fmt.Sprintf("drop database if exists %s", dbName)); err != nil {
-		return fmt.Errorf("drop database failed: %v", err)
+	// terminate the sessions still connected to it, postgres refuses to drop a
+	// database while anyone is attached to it and callers commonly still hold a
+	// pooled connection at cleanup time.
+	if _, err := conn.ExecContext(ctx,
+		"select pg_terminate_backend(pid) from pg_stat_activity where datname = $1 and pid <> pg_backend_pid()",
+		dbName); err != nil {
+		return fmt.Errorf("terminating connections to database %q failed: %w", dbName, err)
+	}
+
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf("drop database if exists %s", quoteIdentifier(dbName))); err != nil {
+		return fmt.Errorf("drop database failed: %w", err)
 	}
 
 	return nil
+}
+
+// quoteIdentifier quotes a postgres identifier so that generated names are never
+// interpreted as syntax.
+func quoteIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
 // Start starts a postgres database
@@ -333,8 +370,10 @@ func (p *Postgres) runUI(ctx context.Context) (database.CloseFunc, error) {
 }
 
 // Instances returns a list of postgres instances
-func Instances(ctx context.Context) ([]database.Info, error) {
-	l, err := container.List(ctx, map[string]string{container.LabelType: database.LabelPostgres})
+// Instances returns the running postgres instances, restricted to the given label
+// when one is provided.
+func Instances(ctx context.Context, label string) ([]database.Info, error) {
+	l, err := container.List(ctx, database.InstanceLabels(database.LabelPostgres, label))
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +477,7 @@ func applyFixturesFromDir(ctx context.Context, conn *sql.DB, dir string, uri str
 }
 
 func createDatabase(ctx context.Context, conn *sql.DB, name string) error {
-	if _, err := conn.ExecContext(ctx, fmt.Sprintf("create database %s", name)); err != nil {
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf("create database %s", quoteIdentifier(name))); err != nil {
 		return fmt.Errorf("create database failed: %w", err)
 	}
 	return nil
@@ -462,11 +501,27 @@ func applySQL(ctx context.Context, conn *sql.DB, stmts []string, uri string) err
 			return fmt.Errorf("read file (%s) failed: %w", f, err)
 		}
 
-		if _, err := conn.Exec(string(b)); err != nil {
+		// one transaction per file, so a failing file does not leave a half
+		// applied schema behind that would then be cached as a template.
+		if err := applyInTx(ctx, conn, string(b)); err != nil {
 			return fmt.Errorf("applying file (%s) failed: %w", f, err)
 		}
 	}
 	return nil
+}
+
+func applyInTx(ctx context.Context, conn *sql.DB, stmt string) error {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, stmt); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func dbConnect(ctx context.Context, uri string) (*sql.DB, error) {

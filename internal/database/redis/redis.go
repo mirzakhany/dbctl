@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -25,6 +26,9 @@ var (
 )
 
 const (
+	// defaultDatabaseCount is the number of databases a redis instance exposes
+	// unless it is configured otherwise
+	defaultDatabaseCount = 16
 	// DefaultPort is the default port for redis
 	DefaultPort = 16379
 	// DefaultUser is the default user for redis
@@ -58,47 +62,85 @@ func New(options ...Option) (*Redis, error) {
 	return rs, nil
 }
 
+// indexKeyPrefix marks a redis database index as handed out. The keys live in
+// index 0, which dbctl keeps for its own bookkeeping and never hands out.
+const indexKeyPrefix = "dbctl:db:"
+
 // CreateDB creates a new database
-func (p *Redis) CreateDB(ctx context.Context, req *database.CreateDBRequest) (*database.CreateDBResponse, error) {
-	// get first available db index
-	dbIndex, err := p.getAvailableDBIndex(ctx)
+func (p *Redis) CreateDB(ctx context.Context, _ *database.CreateDBRequest) (*database.CreateDBResponse, error) {
+	conn, err := redis.DialURLContext(ctx, p.adminURI())
 	if err != nil {
 		return nil, err
 	}
-
-	p.cfg.dbIndex = dbIndex
-	uri := p.URI()
-	// make sure we retrun localhost instead of host.docker.internal
-	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
-		uri = strings.ReplaceAll(uri, "host.docker.internal", "localhost")
-	}
-
-	return &database.CreateDBResponse{URI: uri}, nil
-}
-
-func (p *Redis) getAvailableDBIndex(ctx context.Context) (int, error) {
-	// get or saw db index
-	conn, err := redis.DialURLContext(ctx, p.noAuthURI())
-	if err != nil {
-		return 0, err
-	}
-
 	defer func() {
 		_ = conn.Close()
 	}()
 
+	// get first available db index
+	dbIndex, err := p.acquireDBIndex(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	newDB, err := New(WithHost(p.cfg.user, p.cfg.pass, dbIndex, p.cfg.port))
+	if err != nil {
+		return nil, err
+	}
+
+	return &database.CreateDBResponse{URI: hostURI(newDB.URI())}, nil
+}
+
+// acquireDBIndex claims the first unused redis database index. Redis exposes a
+// fixed set of numbered databases (16 by default) rather than named ones, so the
+// claim has to be recorded to stop two callers from sharing one index.
+func (p *Redis) acquireDBIndex(conn redis.Conn) (int, error) {
+	count, err := databaseCount(conn)
+	if err != nil {
+		return 0, err
+	}
+
+	// index 0 holds the bookkeeping keys, indexes 1..count-1 are handed out.
 	stmt := redis.NewScript(0, `
-		local dbIndex = redis.call("GET", "dbctl:dbIndex")
-		if not dbIndex then
-			dbIndex = 1
+		local count = tonumber(ARGV[1])
+		local prefix = ARGV[2]
+		for index = 1, count - 1 do
+			if redis.call("SETNX", prefix .. index, 1) == 1 then
+				redis.call("SELECT", index)
+				redis.call("FLUSHDB")
+				redis.call("SELECT", 0)
+				return index
+			end
 		end
-		redis.call("SET", "dbctl:dbIndex", dbIndex+1)
-		redis.call("SELECT", dbIndex)
-		redis.call("FLUSHDB")
-		return dbIndex
+		return -1
 	`)
 
-	return redis.Int(stmt.Do(conn))
+	index, err := redis.Int(stmt.Do(conn, count, indexKeyPrefix))
+	if err != nil {
+		return 0, err
+	}
+
+	if index < 0 {
+		return 0, fmt.Errorf("no free redis database left, all %d indexes of this instance are in use, "+
+			"remove the databases you no longer need", count-1)
+	}
+
+	return index, nil
+}
+
+// databaseCount reports how many databases this redis instance exposes.
+func databaseCount(conn redis.Conn) (int, error) {
+	values, err := redis.Strings(conn.Do("CONFIG", "GET", "databases"))
+	if err != nil || len(values) != 2 {
+		// CONFIG may be renamed or disabled, fall back to the redis default.
+		return defaultDatabaseCount, nil //nolint:nilerr
+	}
+
+	count, err := strconv.Atoi(values[1])
+	if err != nil || count < 2 {
+		return defaultDatabaseCount, nil //nolint:nilerr
+	}
+
+	return count, nil
 }
 
 // RemoveDB removes a database by its uri
@@ -111,21 +153,25 @@ func (p *Redis) RemoveDB(ctx context.Context, uri string) error {
 	// get db index from uri
 	dbIndex, err := strconv.Atoi(strings.TrimPrefix(u.Path, "/"))
 	if err != nil {
-		return err
+		return fmt.Errorf("uri %q does not contain a database index: %w", uri, err)
 	}
 
-	// remove db index and flush db
+	// index 0 is dbctl's own bookkeeping database, it is never handed out and
+	// must not be flushed.
+	if dbIndex == 0 {
+		return nil
+	}
+
+	// flush the database and release the index for reuse
 	stmt := redis.NewScript(0, `
 		local dbIndex = tonumber(ARGV[1])
-		if dbIndex == 0 then
-			return
-		end
 		redis.call("SELECT", dbIndex)
 		redis.call("FLUSHDB")
-		redis.call("SET", "dbctl:dbIndex", dbIndex-1)
+		redis.call("SELECT", 0)
+		redis.call("DEL", ARGV[2] .. dbIndex)
 	`)
 
-	conn, err := redis.DialURLContext(ctx, p.noAuthURI())
+	conn, err := redis.DialURLContext(ctx, p.adminURI())
 	if err != nil {
 		return err
 	}
@@ -134,8 +180,19 @@ func (p *Redis) RemoveDB(ctx context.Context, uri string) error {
 		_ = conn.Close()
 	}()
 
-	_, err = stmt.Do(conn, dbIndex)
-	return err
+	if _, err := stmt.Do(conn, dbIndex, indexKeyPrefix); err != nil && !errors.Is(err, redis.ErrNil) {
+		return err
+	}
+	return nil
+}
+
+// hostURI rewrites a uri so that it is usable by the caller. The api server reaches
+// the databases through host.docker.internal, its clients run outside docker.
+func hostURI(uri string) string {
+	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
+		return strings.ReplaceAll(uri, "host.docker.internal", "localhost")
+	}
+	return uri
 }
 
 // Start starts the database
@@ -197,8 +254,10 @@ func (p *Redis) WaitForStart(ctx context.Context, timeout time.Duration) error {
 }
 
 // Instances returns a list of running redis instances
-func Instances(ctx context.Context) ([]database.Info, error) {
-	l, err := container.List(ctx, map[string]string{container.LabelType: database.LabelRedis})
+// Instances returns the running redis instances, restricted to the given label
+// when one is provided.
+func Instances(ctx context.Context, label string) ([]database.Info, error) {
+	l, err := container.List(ctx, database.InstanceLabels(database.LabelRedis, label))
 	if err != nil {
 		return nil, err
 	}
@@ -254,6 +313,8 @@ func (p *Redis) startUsingDocker(ctx context.Context, timeout time.Duration) (fu
 	return closeFunc, p.setAuth(ctx, p.noAuthURI())
 }
 
+// noAuthURI points at index 0 without credentials. It is only valid while the
+// instance is booting, before setAuth has configured a password.
 func (p *Redis) noAuthURI() string {
 	addr := "localhost"
 	if os.Getenv("DBCTL_INSIDE_DOCKER") == "true" {
@@ -263,8 +324,20 @@ func (p *Redis) noAuthURI() string {
 	return (&url.URL{
 		Scheme: "redis",
 		Host:   net.JoinHostPort(addr, strconv.Itoa(int(p.cfg.port))),
-		Path:   strconv.Itoa(p.cfg.dbIndex),
+		Path:   "0",
 	}).String()
+}
+
+// adminURI is the connection string dbctl uses for its own bookkeeping. It always
+// points at index 0 but, unlike noAuthURI, it keeps the credentials so that
+// instances started with a password still work.
+func (p *Redis) adminURI() string {
+	admin, err := New(WithHost(p.cfg.user, p.cfg.pass, 0, p.cfg.port))
+	if err != nil {
+		// the options used here never fail, fall back to this instance's uri.
+		return p.URI()
+	}
+	return admin.URI()
 }
 
 // URI returns the connection string for the database

@@ -22,7 +22,7 @@ func GetPgCmd() *cobra.Command {
 	cmd.Flags().StringP("user", "u", pg.DefaultUser, "Database username")
 	cmd.Flags().String("pass", pg.DefaultPass, "Database password")
 	cmd.Flags().StringP("name", "n", pg.DefaultName, "Database name")
-	cmd.Flags().StringP("version", "v", "", "Database version, default 14.3.2")
+	cmd.Flags().StringP("version", "v", "", fmt.Sprintf("Database version, default %s", pg.DefaultVersion))
 	cmd.Flags().StringP("migrations", "m", "", "Path to migration files, will be applied if provided")
 	cmd.Flags().StringP("fixtures", "f", "", "Path to fixture files, its can be a file or directory.files in directory will be sorted by name before applying.")
 

@@ -1,6 +1,9 @@
 package testing
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +18,7 @@ func GetStartTestingCmd(rootCmd *cobra.Command) *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "testing -- pg [options] - rs [options]",
 		Short: "Start dbctl server for unit testing",
-		Run: func(cobraCmd *cobra.Command, args []string) {
+		RunE: func(cobraCmd *cobra.Command, args []string) error {
 			var cmdParts []string
 			var cmdList [][]string
 			for _, arg := range args {
@@ -30,17 +33,25 @@ func GetStartTestingCmd(rootCmd *cobra.Command) *cobra.Command {
 			}
 			cmdList = append(cmdList, cmdParts)
 
-			// run db commands
+			// run db commands. a database that fails to start has to stop the whole
+			// command: carrying on would leave the api server pointing at nothing, or
+			// worse, at an instance left behind by an earlier run.
 			for _, cmdParts := range cmdList {
 				m := []string{"start", "-d"}
 				m = append(m, cmdParts...)
 				rootCmd.SetArgs(m)
-				rootCmd.Execute()
+				if err := rootCmd.Execute(); err != nil {
+					return fmt.Errorf("starting %s failed: %w", strings.Join(cmdParts, " "), err)
+				}
 			}
 
 			// run api server
 			rootCmd.SetArgs([]string{"api-server", "-t"})
-			rootCmd.Execute()
+			if err := rootCmd.Execute(); err != nil {
+				return fmt.Errorf("starting api server failed: %w", err)
+			}
+
+			return nil
 		},
 	}
 

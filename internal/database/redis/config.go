@@ -3,6 +3,8 @@ package redis
 import (
 	"fmt"
 	"io"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -34,6 +36,41 @@ func WithHost(user, pass string, dbIndex int, port uint32) Option {
 		c.pass = pass
 		c.port = port
 		c.dbIndex = dbIndex
+		return nil
+	}
+}
+
+// WithURI applies the instance connection details found in a database uri to config.
+// The database index is deliberately left untouched: administrative commands run
+// against index 0, where dbctl keeps its bookkeeping keys.
+func WithURI(uri string) Option {
+	return func(c *config) error {
+		if uri == "" {
+			return nil
+		}
+
+		u, err := url.Parse(uri)
+		if err != nil {
+			return fmt.Errorf("parse database uri failed: %w", err)
+		}
+
+		if u.User != nil {
+			if name := u.User.Username(); name != "" {
+				c.user = name
+			}
+			if pass, ok := u.User.Password(); ok {
+				c.pass = pass
+			}
+		}
+
+		if p := u.Port(); p != "" {
+			port, err := strconv.ParseUint(p, 10, 32)
+			if err != nil {
+				return fmt.Errorf("invalid port in database uri %q: %w", uri, err)
+			}
+			c.port = uint32(port)
+		}
+
 		return nil
 	}
 }

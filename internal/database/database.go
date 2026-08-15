@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"time"
+
+	"github.com/mirzakhany/dbctl/internal/container"
 )
 
 type Status int
@@ -14,6 +16,13 @@ const (
 	Stoped
 )
 
+// Database type names accepted by the api server and its clients.
+const (
+	TypePostgres = "postgres"
+	TypeRedis    = "redis"
+	TypeMongoDB  = "mongodb"
+)
+
 const (
 	LabelPostgres     = "postgres"
 	LabelPGWeb        = "pgweb"
@@ -22,6 +31,18 @@ const (
 	LabelMongoExpress = "mongoexpress"
 	LabelTesting      = "testing"
 )
+
+// InstanceLabels builds the container label filter for a database type, narrowed
+// down to a user supplied label when one is given. Without it, commands would act
+// on every dbctl instance on the machine, including the ones another project is
+// running.
+func InstanceLabels(dbType, label string) map[string]string {
+	labels := map[string]string{container.LabelType: dbType}
+	if label != "" {
+		labels[container.LabelCustom] = label
+	}
+	return labels
+}
 
 type Info struct {
 	ID     string

@@ -13,6 +13,9 @@ func GetRootCmd(version string) *cobra.Command {
 		Long: `Dbctl is a command line tools, providing simple 
 command to run and manage databases for tests proposes`,
 		TraverseChildren: true,
+		// a database that failed to start is not a usage problem, printing the
+		// whole help text on top of the error only hides it.
+		SilenceUsage: true,
 	}
 
 	cmd.PersistentFlags().String("label", "", "Label to add to the running container or api-server")

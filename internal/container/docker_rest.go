@@ -108,6 +108,10 @@ func CreateContainer(ctx context.Context, params CreateRequest) (string, error) 
 		ExposedPorts: exposedPortSet,
 	}, &container.HostConfig{
 		PortBindings: exposedPortMap,
+		// containers reach services running on the host through
+		// host.docker.internal. Docker Desktop provides that name, on linux it
+		// has to be mapped to the gateway explicitly.
+		ExtraHosts: []string{"host.docker.internal:host-gateway"},
 	}, nil,
 		nil,
 		params.Name,
@@ -119,19 +123,30 @@ func CreateContainer(ctx context.Context, params CreateRequest) (string, error) 
 	return resp.ID, nil
 }
 
-// PullImage pulls a docker image
+// PullImage pulls a docker image unless it is already present locally
 func PullImage(ctx context.Context, image string) error {
-	logger.Info(fmt.Sprintf("Pulling docker image: %q, depends on your connection speed it might take upto minutes", image))
 	cl, closer, err := getDockerClient()
 	if err != nil {
 		return err
 	}
 	defer closer()
 
+	// a locally available image is used as is, that keeps repeated runs fast and
+	// working without a network connection.
+	if _, _, err := cl.ImageInspectWithRaw(ctx, image); err == nil {
+		logger.Debug(fmt.Sprintf("Using local docker image: %q", image))
+		return nil
+	}
+
+	logger.Info(fmt.Sprintf("Pulling docker image: %q, depends on your connection speed it might take upto minutes", image))
+
 	res, err := cl.ImagePull(ctx, image, types.ImagePullOptions{})
 	if err != nil {
 		return err
 	}
+	defer func() {
+		_ = res.Close()
+	}()
 
 	// read the body to make sure we wait for image to get pulled
 	_, err = io.ReadAll(res)

@@ -55,4 +55,15 @@ The testing command runs the databases in detached mode, causing cli to exit whe
 dbctl stop all
 ```
 
-Checkout the Golang SDK docs for how to use DBCTL to run unit tests in golang.
+`stop all` stops every dbctl container on the machine. To only stop the ones belonging to
+this project, start them with a label and stop them by it:
+
+```shell
+dbctl testing --label myproject -- pg
+dbctl stop myproject
+```
+
+`dbctl stop pg` also accepts `--label`, without it every postgres instance dbctl manages is
+stopped, including the ones another project is using.
+
+Checkout the Golang and Python SDK docs for how to use DBCTL to run unit tests.
